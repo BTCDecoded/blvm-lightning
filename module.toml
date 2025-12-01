@@ -1,0 +1,11 @@
+name = "bllvm-lightning"
+version = "0.1.0"
+description = "Lightning Network payment processor module for bllvm-node"
+author = "Bitcoin Commons Team"
+entry_point = "bllvm-lightning"
+
+capabilities = [
+    "read_blockchain",
+    "subscribe_events",
+]
+
