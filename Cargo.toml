@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # bllvm-node for module system integration
-bllvm-node = { path = "../bllvm-node", package = "bllvm-node" }
+bllvm-node = { path = "../blvm-node", package = "bllvm-node" }
 
 # Async runtime
 tokio = { version = "1.48", features = ["full"] }
