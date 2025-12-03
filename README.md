@@ -90,12 +90,13 @@ capabilities = [
 
 | Feature | LNBits | LDK | Stub |
 |---------|--------|-----|------|
-| **Integration Effort** | 8-12h | 20-30h | 4-6h |
-| **API Type** | REST (HTTP) | Rust API | None |
+| **Status** | ✅ Production-ready | ✅ Fully implemented | ✅ Testing |
+| **API Type** | REST (HTTP) | Rust-native (lightning-invoice) | None |
 | **Real Lightning** | ✅ Yes | ✅ Yes | ❌ No |
 | **External Service** | ✅ Yes | ❌ No | ❌ No |
-| **Wallet Features** | ✅ Built-in | ❌ Manual | ❌ None |
-| **Best For** | Payment processing | Full control | Testing |
+| **Invoice Creation** | ✅ Via API | ✅ Native | ✅ Mock |
+| **Payment Verification** | ✅ Via API | ✅ Native | ✅ Mock |
+| **Best For** | Payment processing | Full control, Rust-native | Testing |
 
 ## Usage
 
