@@ -252,33 +252,18 @@ impl LightningProvider for LDKProvider {
         
         // Build invoice with all required fields
         // lightning-invoice 0.2 requires: description, payment_hash, timestamp, and signature
-        // Note: For now, we'll need to implement proper signing with the node's key
-        // This is a placeholder - in production, use the actual node private key
-        use secp256k1::Secp256k1;
-        use secp256k1::SecretKey;
-        let secp = Secp256k1::new();
-        // TODO: Use actual node private key from configuration
-        // For now, generate a temporary key (this will create invalid invoices)
-        let temp_key = SecretKey::from_slice(&[1; 32])
-            .map_err(|e| LightningError::ProcessorError(format!("Failed to create signing key: {:?}", e)))?;
-        
-        // Note: There's a version mismatch between lightning-invoice's bitcoin_hashes (0.11)
-        // and our bitcoin_hashes (0.13). For now, we'll need to work around this.
-        // The payment_hash type from our version won't match exactly.
-        // TODO: Align dependency versions or implement proper type conversion
-        
-        // Try to use the hash directly - if types don't match, we'll get a compile error
-        // and need to implement a conversion layer
+        // bitcoin_hashes 0.3 is aligned with lightning-invoice 0.2 dependencies (see Cargo.toml)
+        // The sha256::Hash type from bitcoin_hashes 0.3 is compatible with InvoiceBuilder
         let invoice = InvoiceBuilder::new(currency)
             .amount_pico_btc(amount_pico_btc)
             .description(description.to_string())
-            .payment_hash(payment_hash)  // This will fail if types don't match - need conversion
+            .payment_hash(payment_hash)
             .expiry_time(std::time::Duration::from_secs(expiry_seconds))
             .min_final_cltv_expiry(144) // Standard 144 blocks
             .current_timestamp()
             .build_signed(|hash| {
-                // secp256k1 0.12 API - use sign_recoverable
-                secp.sign_recoverable(hash, &temp_key)
+                // Use the node's actual private key for signing
+                self.secp.sign_recoverable(hash, &self.node_secret_key)
             })
             .map_err(|e| LightningError::ProcessorError(format!("Failed to build invoice: {:?}", e)))?;
         
