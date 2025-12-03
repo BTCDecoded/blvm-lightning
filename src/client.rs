@@ -1,10 +1,11 @@
 //! IPC client helper for module connection
 
-use bllvm_node::module::ipc::client::ModuleIpcClient;
-use bllvm_node::module::ipc::protocol::{
+use blvm_node::module::ipc::client::ModuleIpcClient;
+use blvm_node::module::ipc::protocol::{
     EventMessage, LogLevel, ModuleMessage, RequestMessage, RequestPayload, ResponsePayload,
 };
-use bllvm_node::module::traits::{EventType, ModuleError};
+use blvm_node::module::EventType;
+use blvm_node::module::traits::ModuleError;
 use futures::StreamExt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,7 +42,7 @@ impl ModuleClient {
         let correlation_id = ipc_client.next_correlation_id();
         let handshake_request = RequestMessage {
             correlation_id,
-            request_type: bllvm_node::module::ipc::protocol::MessageType::Handshake,
+            request_type: blvm_node::module::ipc::protocol::MessageType::Handshake,
             payload: RequestPayload::Handshake {
                 module_id: module_id.clone(),
                 module_name: module_name.clone(),
@@ -107,7 +108,7 @@ impl ModuleClient {
         let correlation_id = self.ipc_client.lock().await.next_correlation_id();
         let request = RequestMessage {
             correlation_id,
-            request_type: bllvm_node::module::ipc::protocol::MessageType::SubscribeEvents,
+            request_type: blvm_node::module::ipc::protocol::MessageType::SubscribeEvents,
             payload: RequestPayload::SubscribeEvents { event_types },
         };
 

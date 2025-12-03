@@ -177,7 +177,8 @@ impl LightningProvider for LNBitsProvider {
         };
 
         let response: InvoiceResponse = self
-            .request(reqwest::Method::POST, &endpoint, Some(serde_json::to_value(request_body)?))
+            .request(reqwest::Method::POST, &endpoint, Some(serde_json::to_value(request_body)
+                .map_err(|e| LightningError::ProcessorError(format!("Failed to serialize request: {}", e)))?))
             .await?;
 
         debug!("LNBits invoice created: {}", response.payment_request);
