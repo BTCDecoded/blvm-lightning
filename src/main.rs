@@ -5,7 +5,8 @@
 //! channel management.
 
 use anyhow::Result;
-use bllvm_node::module::ipc::protocol::{EventMessage, EventPayload, EventType, LogLevel, ModuleMessage};
+use blvm_node::module::{EventType, EventMessage};
+use blvm_node::module::ipc::protocol::{EventPayload, LogLevel, ModuleMessage};
 use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -62,9 +63,10 @@ async fn main() -> Result<()> {
 
     info!("bllvm-lightning module starting... (module_id: {}, socket: {:?})", module_id, socket_path);
 
-    // Connect to node
+    // Connect to node (clone socket_path before moving it)
+    let socket_path_for_connect = socket_path.clone();
     let mut client = match ModuleClient::connect(
-        socket_path,
+        socket_path_for_connect,
         module_id.clone(),
         "bllvm-lightning".to_string(),
         env!("CARGO_PKG_VERSION").to_string(),
@@ -93,14 +95,17 @@ async fn main() -> Result<()> {
     let node_api = Arc::new(NodeApiIpc::new(ipc_client));
 
     // Create processor
-    let ctx = bllvm_node::module::traits::ModuleContext {
+    let ctx = blvm_node::module::traits::ModuleContext {
         module_id: module_id.clone(),
         config: std::collections::HashMap::new(),
-        data_dir: args.data_dir.unwrap_or_else(|| PathBuf::from("data/modules/bllvm-lightning")),
-        socket_path: socket_path.to_string_lossy().to_string(),
+        data_dir: args.data_dir.unwrap_or_else(|| PathBuf::from("data/modules/bllvm-lightning")).to_string_lossy().to_string(),
+        socket_path: socket_path.clone().to_string_lossy().to_string(),
     };
-    let processor = LightningProcessor::new(&ctx, Arc::clone(&node_api)).await
+    let processor = LightningProcessor::new(&ctx, node_api.clone()).await
         .map_err(|e| anyhow::anyhow!("Failed to create processor: {}", e))?;
+    
+    // Wrap processor in Arc for parallel processing
+    let processor = Arc::new(processor);
 
     info!("Lightning module initialized and running");
 
@@ -132,13 +137,17 @@ async fn main() -> Result<()> {
         // Process events in parallel
         let futures: Vec<_> = event_batch
             .iter()
-            .map(|event| async {
-                // Handle events with processor
-                if let Err(e) = processor.handle_event(event, node_api.as_ref()).await {
-                    warn!("Error handling event in processor: {}", e);
-                }
+            .map(|event| {
+                let event = event.clone();
+                let processor = Arc::clone(&processor);
+                let node_api = Arc::clone(&node_api);
+                async move {
+                    // Handle events with processor
+                    if let Err(e) = processor.handle_event(&event, node_api.as_ref()).await {
+                        warn!("Error handling event in processor: {}", e);
+                    }
 
-                match event {
+                    match event {
                     ModuleMessage::Event(event_msg) => {
                         match event_msg.event_type {
                             EventType::PaymentRequestCreated => {
@@ -158,6 +167,7 @@ async fn main() -> Result<()> {
                     _ => {
                         // Not an event message
                     }
+                }
                 }
             })
             .collect();

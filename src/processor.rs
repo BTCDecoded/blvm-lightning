@@ -3,8 +3,11 @@
 use crate::provider::{ProviderType, LightningProvider, create_provider};
 use crate::error::LightningError;
 use crate::invoice::{InvoiceData, InvoiceParser};
-use bllvm_node::module::ipc::protocol::ModuleMessage;
-use bllvm_node::module::traits::{EventPayload, EventType, NodeAPI};
+use blvm_node::module::ipc::protocol::ModuleMessage;
+use blvm_node::module::EventType;
+use blvm_node::module::ipc::protocol::EventPayload;
+use blvm_node::module::traits::NodeAPI;
+use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
@@ -19,7 +22,7 @@ pub struct LightningProcessor {
 impl LightningProcessor {
     /// Create a new Lightning processor
     pub async fn new(
-        ctx: &bllvm_node::module::traits::ModuleContext,
+        ctx: &blvm_node::module::traits::ModuleContext,
         node_api: Arc<dyn NodeAPI>,
     ) -> Result<Self, LightningError> {
         // Determine provider type from config
@@ -112,7 +115,8 @@ impl LightningProcessor {
         }
         
         // Early exit: Check if node_url is configured before HTTP call
-        if self.node_url.is_none() {
+        let node_url = self.node_api.get_lightning_node_url().await?;
+        if node_url.is_none() {
             // Try to get from NodeAPI, but check first
             if node_api.get_lightning_node_url().await.is_err() {
                 return Err(LightningError::ProcessorError("Lightning node URL not configured".to_string()));
@@ -185,7 +189,12 @@ impl LightningProcessor {
             .zip(payments.iter())
             .map(|(invoice_data, (invoice, payment_id))| {
                 let payment_hash = invoice_data.payment_hash();
-                self.provider.verify_payment(invoice, &payment_hash, payment_id)
+                // Clone payment_hash to avoid lifetime issues in async closure
+                let payment_hash_array = payment_hash;
+                let provider = &self.provider;
+                async move {
+                    provider.verify_payment(invoice, &payment_hash_array, payment_id).await
+                }
             })
             .collect();
         

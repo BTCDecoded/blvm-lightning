@@ -7,5 +7,8 @@ pub mod nodeapi_ipc;
 pub mod processor;
 pub mod provider;
 
-pub use provider::{ProviderType, LightningProvider, PaymentVerificationResult, create_provider};
+pub use provider::{
+    ProviderType, LightningProvider, PaymentVerificationResult, create_provider,
+    lnbits, ldk, stub,
+};
 

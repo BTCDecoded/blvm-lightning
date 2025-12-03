@@ -1,6 +1,7 @@
 //! Error types for Lightning module
 
 use thiserror::Error;
+use blvm_node::module::traits::ModuleError;
 
 #[derive(Debug, Error)]
 pub enum LightningError {
@@ -27,5 +28,11 @@ pub enum LightningError {
     
     #[error("Configuration error: {0}")]
     ConfigError(String),
+}
+
+impl From<ModuleError> for LightningError {
+    fn from(err: ModuleError) -> Self {
+        LightningError::ModuleError(format!("{:?}", err))
+    }
 }
 
