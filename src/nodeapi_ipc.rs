@@ -4,9 +4,11 @@
 
 use async_trait::async_trait;
 use blvm_node::module::ipc::client::ModuleIpcClient;
-use blvm_node::module::EventType;
-use blvm_node::module::ipc::protocol::{EventPayload, RequestMessage, RequestPayload, ResponsePayload};
+use blvm_node::module::ipc::protocol::{
+    EventPayload, RequestMessage, RequestPayload, ResponsePayload,
+};
 use blvm_node::module::traits::{ModuleError, NodeAPI};
+use blvm_node::module::EventType;
 use blvm_protocol::{Block, BlockHeader, Hash, OutPoint, Transaction, UTXO};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -57,13 +59,17 @@ impl NodeApiIpc {
 
         if !response.success {
             return Err(ModuleError::OperationError(
-                response.error.unwrap_or_else(|| "Unknown error".to_string()),
+                response
+                    .error
+                    .unwrap_or_else(|| "Unknown error".to_string()),
             ));
         }
 
         match response.payload {
             Some(payload) => mapper(payload),
-            None => Err(ModuleError::OperationError("Empty response payload".to_string())),
+            None => Err(ModuleError::OperationError(
+                "Empty response payload".to_string(),
+            )),
         }
     }
 }
@@ -141,7 +147,9 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::Hash(hash)) => Ok(hash),
-            _ => Err(ModuleError::OperationError("Failed to get chain tip".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to get chain tip".to_string(),
+            )),
         }
     }
 
@@ -156,7 +164,9 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::U64(height)) => Ok(height),
-            _ => Err(ModuleError::OperationError("Failed to get block height".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to get block height".to_string(),
+            )),
         }
     }
 
@@ -180,7 +190,10 @@ impl NodeAPI for NodeApiIpc {
     async fn subscribe_events(
         &self,
         _event_types: Vec<blvm_node::module::traits::EventType>,
-    ) -> Result<tokio::sync::mpsc::Receiver<blvm_node::module::ipc::protocol::ModuleMessage>, ModuleError> {
+    ) -> Result<
+        tokio::sync::mpsc::Receiver<blvm_node::module::ipc::protocol::ModuleMessage>,
+        ModuleError,
+    > {
         // Events are handled via ModuleClient::subscribe_events() in main.rs
         // This is just a stub for the trait
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
@@ -202,7 +215,10 @@ impl NodeAPI for NodeApiIpc {
         }
     }
 
-    async fn get_mempool_transaction(&self, tx_hash: &Hash) -> Result<Option<Transaction>, ModuleError> {
+    async fn get_mempool_transaction(
+        &self,
+        tx_hash: &Hash,
+    ) -> Result<Option<Transaction>, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -217,7 +233,9 @@ impl NodeAPI for NodeApiIpc {
         }
     }
 
-    async fn get_mempool_size(&self) -> Result<blvm_node::module::traits::MempoolSize, ModuleError> {
+    async fn get_mempool_size(
+        &self,
+    ) -> Result<blvm_node::module::traits::MempoolSize, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -228,11 +246,15 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::MempoolSize(size)) => Ok(size),
-            _ => Err(ModuleError::OperationError("Failed to get mempool size".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to get mempool size".to_string(),
+            )),
         }
     }
 
-    async fn get_network_stats(&self) -> Result<blvm_node::module::traits::NetworkStats, ModuleError> {
+    async fn get_network_stats(
+        &self,
+    ) -> Result<blvm_node::module::traits::NetworkStats, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -243,11 +265,15 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::NetworkStats(stats)) => Ok(stats),
-            _ => Err(ModuleError::OperationError("Failed to get network stats".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to get network stats".to_string(),
+            )),
         }
     }
 
-    async fn get_network_peers(&self) -> Result<Vec<blvm_node::module::traits::PeerInfo>, ModuleError> {
+    async fn get_network_peers(
+        &self,
+    ) -> Result<Vec<blvm_node::module::traits::PeerInfo>, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -273,7 +299,9 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::ChainInfo(info)) => Ok(info),
-            _ => Err(ModuleError::OperationError("Failed to get chain info".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to get chain info".to_string(),
+            )),
         }
     }
 
@@ -307,7 +335,9 @@ impl NodeAPI for NodeApiIpc {
         }
     }
 
-    async fn get_lightning_info(&self) -> Result<Option<blvm_node::module::traits::LightningInfo>, ModuleError> {
+    async fn get_lightning_info(
+        &self,
+    ) -> Result<Option<blvm_node::module::traits::LightningInfo>, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -322,7 +352,10 @@ impl NodeAPI for NodeApiIpc {
         }
     }
 
-    async fn get_payment_state(&self, payment_id: &str) -> Result<Option<blvm_node::module::traits::PaymentState>, ModuleError> {
+    async fn get_payment_state(
+        &self,
+        payment_id: &str,
+    ) -> Result<Option<blvm_node::module::traits::PaymentState>, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -365,7 +398,9 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::FeeEstimate(estimate)) => Ok(estimate),
-            _ => Err(ModuleError::OperationError("Failed to get fee estimate".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to get fee estimate".to_string(),
+            )),
         }
     }
 
@@ -381,7 +416,9 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::FileData(data)) => Ok(data),
-            _ => Err(ModuleError::OperationError("Failed to read file".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to read file".to_string(),
+            )),
         }
     }
 
@@ -397,7 +434,11 @@ impl NodeAPI for NodeApiIpc {
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(response.error.unwrap_or_else(|| "Failed to write file".to_string())))
+            Err(ModuleError::OperationError(
+                response
+                    .error
+                    .unwrap_or_else(|| "Failed to write file".to_string()),
+            ))
         }
     }
 
@@ -413,7 +454,11 @@ impl NodeAPI for NodeApiIpc {
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(response.error.unwrap_or_else(|| "Failed to delete file".to_string())))
+            Err(ModuleError::OperationError(
+                response
+                    .error
+                    .unwrap_or_else(|| "Failed to delete file".to_string()),
+            ))
         }
     }
 
@@ -444,7 +489,9 @@ impl NodeAPI for NodeApiIpc {
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(response.error.unwrap_or_else(|| "Failed to create directory".to_string())))
+            Err(ModuleError::OperationError(response.error.unwrap_or_else(
+                || "Failed to create directory".to_string(),
+            )))
         }
     }
 
@@ -462,7 +509,9 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::FileMetadata(metadata)) => Ok(metadata),
-            _ => Err(ModuleError::OperationError("Failed to get file metadata".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to get file metadata".to_string(),
+            )),
         }
     }
 
@@ -478,27 +527,44 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::StorageTreeId(tree_id)) => Ok(tree_id),
-            _ => Err(ModuleError::OperationError("Failed to open storage tree".to_string())),
+            _ => Err(ModuleError::OperationError(
+                "Failed to open storage tree".to_string(),
+            )),
         }
     }
 
-    async fn storage_insert(&self, tree_id: String, key: Vec<u8>, value: Vec<u8>) -> Result<(), ModuleError> {
+    async fn storage_insert(
+        &self,
+        tree_id: String,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
             request_type: blvm_node::module::ipc::protocol::MessageType::GetBlock,
-            payload: RequestPayload::StorageInsert { tree_id, key, value },
+            payload: RequestPayload::StorageInsert {
+                tree_id,
+                key,
+                value,
+            },
         };
 
         let response = self.ipc_client.lock().await.request(request).await?;
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(response.error.unwrap_or_else(|| "Failed to insert into storage".to_string())))
+            Err(ModuleError::OperationError(response.error.unwrap_or_else(
+                || "Failed to insert into storage".to_string(),
+            )))
         }
     }
 
-    async fn storage_get(&self, tree_id: String, key: Vec<u8>) -> Result<Option<Vec<u8>>, ModuleError> {
+    async fn storage_get(
+        &self,
+        tree_id: String,
+        key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -525,11 +591,17 @@ impl NodeAPI for NodeApiIpc {
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(response.error.unwrap_or_else(|| "Failed to remove from storage".to_string())))
+            Err(ModuleError::OperationError(response.error.unwrap_or_else(
+                || "Failed to remove from storage".to_string(),
+            )))
         }
     }
 
-    async fn storage_contains_key(&self, tree_id: String, key: Vec<u8>) -> Result<bool, ModuleError> {
+    async fn storage_contains_key(
+        &self,
+        tree_id: String,
+        key: Vec<u8>,
+    ) -> Result<bool, ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -568,14 +640,19 @@ impl NodeAPI for NodeApiIpc {
         let request = RequestMessage {
             correlation_id,
             request_type: blvm_node::module::ipc::protocol::MessageType::GetBlock,
-            payload: RequestPayload::StorageTransaction { tree_id, operations },
+            payload: RequestPayload::StorageTransaction {
+                tree_id,
+                operations,
+            },
         };
 
         let response = self.ipc_client.lock().await.request(request).await?;
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(response.error.unwrap_or_else(|| "Failed to execute storage transaction".to_string())))
+            Err(ModuleError::OperationError(response.error.unwrap_or_else(
+                || "Failed to execute storage transaction".to_string(),
+            )))
         }
     }
 
@@ -590,16 +667,19 @@ impl NodeAPI for NodeApiIpc {
         let request = RequestMessage {
             correlation_id,
             request_type: blvm_node::module::ipc::protocol::MessageType::RegisterRpcEndpoint,
-            payload: RequestPayload::RegisterRpcEndpoint { method, description },
+            payload: RequestPayload::RegisterRpcEndpoint {
+                method,
+                description,
+            },
         };
 
         let response = self.ipc_client.lock().await.request(request).await?;
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(
-                response.error.unwrap_or_else(|| "Failed to register RPC endpoint".to_string()),
-            ))
+            Err(ModuleError::OperationError(response.error.unwrap_or_else(
+                || "Failed to register RPC endpoint".to_string(),
+            )))
         }
     }
 
@@ -617,9 +697,9 @@ impl NodeAPI for NodeApiIpc {
         if response.success {
             Ok(())
         } else {
-            Err(ModuleError::OperationError(
-                response.error.unwrap_or_else(|| "Failed to unregister RPC endpoint".to_string()),
-            ))
+            Err(ModuleError::OperationError(response.error.unwrap_or_else(
+                || "Failed to unregister RPC endpoint".to_string(),
+            )))
         }
     }
 
@@ -641,7 +721,8 @@ impl NodeAPI for NodeApiIpc {
         _timer_id: blvm_node::module::timers::manager::TimerId,
     ) -> Result<(), ModuleError> {
         Err(ModuleError::OperationError(
-            "Timer callbacks cannot be serialized over IPC. Manage timers locally in the module.".to_string(),
+            "Timer callbacks cannot be serialized over IPC. Manage timers locally in the module."
+                .to_string(),
         ))
     }
 
@@ -656,7 +737,10 @@ impl NodeAPI for NodeApiIpc {
     }
 
     // Metrics and telemetry
-    async fn report_metric(&self, metric: blvm_node::module::metrics::manager::Metric) -> Result<(), ModuleError> {
+    async fn report_metric(
+        &self,
+        metric: blvm_node::module::metrics::manager::Metric,
+    ) -> Result<(), ModuleError> {
         let correlation_id = self.next_correlation_id().await;
         let request = RequestMessage {
             correlation_id,
@@ -669,7 +753,9 @@ impl NodeAPI for NodeApiIpc {
             Ok(())
         } else {
             Err(ModuleError::OperationError(
-                response.error.unwrap_or_else(|| "Failed to report metric".to_string()),
+                response
+                    .error
+                    .unwrap_or_else(|| "Failed to report metric".to_string()),
             ))
         }
     }
@@ -690,9 +776,11 @@ impl NodeAPI for NodeApiIpc {
         let response = self.ipc_client.lock().await.request(request).await?;
         match response.payload {
             Some(ResponsePayload::ModuleMetrics(metrics)) => Ok(metrics),
-            _ => Err(ModuleError::OperationError(
-                response.error.unwrap_or_else(|| "Failed to get module metrics".to_string()),
-            )),
+            _ => {
+                Err(ModuleError::OperationError(response.error.unwrap_or_else(
+                    || "Failed to get module metrics".to_string(),
+                )))
+            }
         }
     }
 
@@ -706,20 +794,27 @@ impl NodeAPI for NodeApiIpc {
         // This is called by the IPC server during handshake, not by modules directly
         Ok(())
     }
-    
-    async fn discover_modules(&self) -> Result<Vec<blvm_node::module::traits::ModuleInfo>, ModuleError> {
+
+    async fn discover_modules(
+        &self,
+    ) -> Result<Vec<blvm_node::module::traits::ModuleInfo>, ModuleError> {
         self.request(
             RequestPayload::DiscoverModules,
             blvm_node::module::ipc::protocol::MessageType::DiscoverModules,
             |payload| match payload {
                 ResponsePayload::ModuleList(modules) => Ok(modules),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
     }
-    
-    async fn get_module_info(&self, module_id: &str) -> Result<Option<blvm_node::module::traits::ModuleInfo>, ModuleError> {
+
+    async fn get_module_info(
+        &self,
+        module_id: &str,
+    ) -> Result<Option<blvm_node::module::traits::ModuleInfo>, ModuleError> {
         self.request(
             RequestPayload::GetModuleInfo {
                 module_id: module_id.to_string(),
@@ -727,12 +822,14 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::GetModuleInfo,
             |payload| match payload {
                 ResponsePayload::ModuleInfo(info) => Ok(info),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
     }
-    
+
     async fn is_module_available(&self, module_id: &str) -> Result<bool, ModuleError> {
         self.request(
             RequestPayload::IsModuleAvailable {
@@ -741,51 +838,70 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::IsModuleAvailable,
             |payload| match payload {
                 ResponsePayload::ModuleAvailable(available) => Ok(available),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
     }
-    
+
     async fn publish_event(
         &self,
         event_type: EventType,
         payload: EventPayload,
     ) -> Result<(), ModuleError> {
         self.request(
-            RequestPayload::PublishEvent { event_type, payload },
+            RequestPayload::PublishEvent {
+                event_type,
+                payload,
+            },
             blvm_node::module::ipc::protocol::MessageType::PublishEvent,
             |payload| match payload {
                 ResponsePayload::EventPublished => Ok(()),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
     }
-    
+
     async fn send_mesh_packet_to_peer(
         &self,
         peer_addr: String,
         packet_data: Vec<u8>,
     ) -> Result<(), ModuleError> {
         self.request(
-            RequestPayload::SendMeshPacketToPeer { peer_addr, packet_data },
+            RequestPayload::SendMeshPacketToPeer {
+                peer_addr,
+                packet_data,
+            },
             blvm_node::module::ipc::protocol::MessageType::SendMeshPacketToPeer,
             |payload| match payload {
                 ResponsePayload::Bool(success) => {
                     if success {
                         Ok(())
                     } else {
-                        Err(ModuleError::OperationError("Failed to send mesh packet".to_string()))
+                        Err(ModuleError::OperationError(
+                            "Failed to send mesh packet".to_string(),
+                        ))
                     }
                 }
-                _ => Err(ModuleError::OperationError("Invalid response format".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Invalid response format".to_string(),
+                )),
             },
         )
         .await
     }
 
-    async fn get_all_metrics(&self) -> Result<std::collections::HashMap<String, Vec<blvm_node::module::metrics::manager::Metric>>, ModuleError> {
+    async fn get_all_metrics(
+        &self,
+    ) -> Result<
+        std::collections::HashMap<String, Vec<blvm_node::module::metrics::manager::Metric>>,
+        ModuleError,
+    > {
         Err(ModuleError::OperationError("Not implemented".to_string()))
     }
 
@@ -826,11 +942,16 @@ impl NodeAPI for NodeApiIpc {
         Err(ModuleError::OperationError("Not implemented".to_string()))
     }
 
-    async fn get_module_health(&self, _module_id: &str) -> Result<Option<blvm_node::module::process::monitor::ModuleHealth>, ModuleError> {
+    async fn get_module_health(
+        &self,
+        _module_id: &str,
+    ) -> Result<Option<blvm_node::module::process::monitor::ModuleHealth>, ModuleError> {
         Err(ModuleError::OperationError("Not implemented".to_string()))
     }
 
-    async fn get_all_module_health(&self) -> Result<Vec<(String, blvm_node::module::process::monitor::ModuleHealth)>, ModuleError> {
+    async fn get_all_module_health(
+        &self,
+    ) -> Result<Vec<(String, blvm_node::module::process::monitor::ModuleHealth)>, ModuleError> {
         Err(ModuleError::OperationError("Not implemented".to_string()))
     }
 
@@ -841,4 +962,3 @@ impl NodeAPI for NodeApiIpc {
         Err(ModuleError::OperationError("Not implemented".to_string()))
     }
 }
-

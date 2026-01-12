@@ -8,7 +8,5 @@ pub mod processor;
 pub mod provider;
 
 pub use provider::{
-    ProviderType, LightningProvider, PaymentVerificationResult, create_provider,
-    lnbits, ldk, stub,
+    create_provider, ldk, lnbits, stub, LightningProvider, PaymentVerificationResult, ProviderType,
 };
-

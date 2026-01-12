@@ -2,14 +2,14 @@
 //!
 //! Integrates with LNBits REST API for Lightning payments.
 
-use crate::provider::{ProviderType, LightningProvider, PaymentVerificationResult};
 use crate::error::LightningError;
+use crate::provider::{LightningProvider, PaymentVerificationResult, ProviderType};
 use async_trait::async_trait;
+use hex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{debug, warn};
-use hex;
 
 /// LNBits provider configuration
 #[derive(Debug, Clone)]
@@ -34,7 +34,9 @@ impl LNBitsProvider {
         let http_client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .map_err(|e| LightningError::ProcessorError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                LightningError::ProcessorError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         Ok(Self {
             config,
@@ -49,8 +51,12 @@ impl LNBitsProvider {
         endpoint: &str,
         body: Option<serde_json::Value>,
     ) -> Result<T, LightningError> {
-        let url = format!("{}/api/v1{}", self.config.api_url.trim_end_matches('/'), endpoint);
-        
+        let url = format!(
+            "{}/api/v1{}",
+            self.config.api_url.trim_end_matches('/'),
+            endpoint
+        );
+
         let mut request = self
             .http_client
             .request(method, &url)
@@ -61,24 +67,25 @@ impl LNBitsProvider {
             request = request.json(&body);
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| LightningError::ProcessorError(format!("LNBits API request failed: {}", e)))?;
+        let response = request.send().await.map_err(|e| {
+            LightningError::ProcessorError(format!("LNBits API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(LightningError::ProcessorError(format!(
                 "LNBits API error: {} - {}",
                 status, error_text
             )));
         }
 
-        response
-            .json::<T>()
-            .await
-            .map_err(|e| LightningError::ProcessorError(format!("Failed to parse LNBits response: {}", e)))
+        response.json::<T>().await.map_err(|e| {
+            LightningError::ProcessorError(format!("Failed to parse LNBits response: {}", e))
+        })
     }
 }
 
@@ -106,7 +113,10 @@ impl LightningProvider for LNBitsProvider {
             timestamp: Option<u64>,
         }
 
-        match self.request::<PaymentResponse>(reqwest::Method::GET, &endpoint, None).await {
+        match self
+            .request::<PaymentResponse>(reqwest::Method::GET, &endpoint, None)
+            .await
+        {
             Ok(payment) => {
                 let verified = payment.paid;
                 debug!(
@@ -126,7 +136,10 @@ impl LightningProvider for LNBitsProvider {
             }
             Err(e) => {
                 // If payment not found, it might not be paid yet
-                warn!("LNBits payment check failed: payment_id={}, error={}", payment_id, e);
+                warn!(
+                    "LNBits payment check failed: payment_id={}, error={}",
+                    payment_id, e
+                );
                 Ok(PaymentVerificationResult {
                     verified: false,
                     amount_msats: None,
@@ -177,8 +190,13 @@ impl LightningProvider for LNBitsProvider {
         };
 
         let response: InvoiceResponse = self
-            .request(reqwest::Method::POST, &endpoint, Some(serde_json::to_value(request_body)
-                .map_err(|e| LightningError::ProcessorError(format!("Failed to serialize request: {}", e)))?))
+            .request(
+                reqwest::Method::POST,
+                &endpoint,
+                Some(serde_json::to_value(request_body).map_err(|e| {
+                    LightningError::ProcessorError(format!("Failed to serialize request: {}", e))
+                })?),
+            )
             .await?;
 
         debug!("LNBits invoice created: {}", response.payment_request);
@@ -194,7 +212,10 @@ impl LightningProvider for LNBitsProvider {
             paid: bool,
         }
 
-        match self.request::<PaymentResponse>(reqwest::Method::GET, &endpoint, None).await {
+        match self
+            .request::<PaymentResponse>(reqwest::Method::GET, &endpoint, None)
+            .await
+        {
             Ok(payment) => Ok(payment.paid),
             Err(_) => Ok(false), // Payment not found = not confirmed
         }
@@ -204,4 +225,3 @@ impl LightningProvider for LNBitsProvider {
         ProviderType::LNBits
     }
 }
-

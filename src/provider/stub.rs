@@ -2,8 +2,8 @@
 //!
 //! For testing and development. Always succeeds verification.
 
-use crate::provider::{ProviderType, LightningProvider, PaymentVerificationResult};
 use crate::error::LightningError;
+use crate::provider::{LightningProvider, PaymentVerificationResult, ProviderType};
 use async_trait::async_trait;
 use tracing::debug;
 
@@ -25,8 +25,11 @@ impl LightningProvider for StubProvider {
         _payment_hash: &[u8; 32],
         payment_id: &str,
     ) -> Result<PaymentVerificationResult, LightningError> {
-        debug!("Stub provider: verifying payment (always succeeds): payment_id={}", payment_id);
-        
+        debug!(
+            "Stub provider: verifying payment (always succeeds): payment_id={}",
+            payment_id
+        );
+
         // Stub: Always return verified
         Ok(PaymentVerificationResult {
             verified: true,
@@ -50,8 +53,11 @@ impl LightningProvider for StubProvider {
         description: &str,
         _expiry_seconds: u64,
     ) -> Result<String, LightningError> {
-        debug!("Stub provider: creating invoice: amount={} msats, description={}", amount_msats, description);
-        
+        debug!(
+            "Stub provider: creating invoice: amount={} msats, description={}",
+            amount_msats, description
+        );
+
         // Stub: Return a fake invoice
         // In production, this would be a real BOLT11 invoice
         Ok(format!("lnbc{}u1pstub_invoice", amount_msats))
@@ -66,4 +72,3 @@ impl LightningProvider for StubProvider {
         ProviderType::Stub
     }
 }
-

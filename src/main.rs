@@ -5,24 +5,24 @@
 //! channel management.
 
 use anyhow::Result;
-use blvm_node::module::{EventType, EventMessage};
 use blvm_node::module::ipc::protocol::{EventPayload, LogLevel, ModuleMessage};
+use blvm_node::module::{EventMessage, EventType};
 use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-mod provider;
-mod processor;
-mod invoice;
-mod error;
 mod client;
+mod error;
+mod invoice;
 mod nodeapi_ipc;
+mod processor;
+mod provider;
 
-use processor::LightningProcessor;
-use error::LightningError;
 use client::ModuleClient;
+use error::LightningError;
 use nodeapi_ipc::NodeApiIpc;
+use processor::LightningProcessor;
 
 /// Command-line arguments for the module
 #[derive(Parser, Debug)]
@@ -51,17 +51,26 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Get module ID (from args or environment)
-    let module_id = args.module_id
+    let module_id = args
+        .module_id
         .or_else(|| std::env::var("MODULE_NAME").ok())
         .unwrap_or_else(|| "bllvm-lightning".to_string());
 
     // Get socket path (from args, env, or default)
-    let socket_path = args.socket_path
+    let socket_path = args
+        .socket_path
         .or_else(|| std::env::var("BLLVM_MODULE_SOCKET").ok().map(PathBuf::from))
-        .or_else(|| std::env::var("MODULE_SOCKET_DIR").ok().map(|d| PathBuf::from(d).join("modules.sock")))
+        .or_else(|| {
+            std::env::var("MODULE_SOCKET_DIR")
+                .ok()
+                .map(|d| PathBuf::from(d).join("modules.sock"))
+        })
         .unwrap_or_else(|| PathBuf::from("data/modules/modules.sock"));
 
-    info!("bllvm-lightning module starting... (module_id: {}, socket: {:?})", module_id, socket_path);
+    info!(
+        "bllvm-lightning module starting... (module_id: {}, socket: {:?})",
+        module_id, socket_path
+    );
 
     // Connect to node (clone socket_path before moving it)
     let socket_path_for_connect = socket_path.clone();
@@ -70,7 +79,9 @@ async fn main() -> Result<()> {
         module_id.clone(),
         "bllvm-lightning".to_string(),
         env!("CARGO_PKG_VERSION").to_string(),
-    ).await {
+    )
+    .await
+    {
         Ok(client) => client,
         Err(e) => {
             error!("Failed to connect to node: {}", e);
@@ -98,12 +109,17 @@ async fn main() -> Result<()> {
     let ctx = blvm_node::module::traits::ModuleContext {
         module_id: module_id.clone(),
         config: std::collections::HashMap::new(),
-        data_dir: args.data_dir.unwrap_or_else(|| PathBuf::from("data/modules/bllvm-lightning")).to_string_lossy().to_string(),
+        data_dir: args
+            .data_dir
+            .unwrap_or_else(|| PathBuf::from("data/modules/bllvm-lightning"))
+            .to_string_lossy()
+            .to_string(),
         socket_path: socket_path.clone().to_string_lossy().to_string(),
     };
-    let processor = LightningProcessor::new(&ctx, node_api.clone()).await
+    let processor = LightningProcessor::new(&ctx, node_api.clone())
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to create processor: {}", e))?;
-    
+
     // Wrap processor in Arc for parallel processing
     let processor = Arc::new(processor);
 
@@ -124,7 +140,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        
+
         // If no events in batch, wait for next event
         if event_batch.is_empty() {
             if let Some(event) = event_receiver.recv().await {
@@ -133,7 +149,7 @@ async fn main() -> Result<()> {
                 break; // Channel closed
             }
         }
-        
+
         // Process events in parallel
         let futures: Vec<_> = event_batch
             .iter()
@@ -148,30 +164,30 @@ async fn main() -> Result<()> {
                     }
 
                     match event {
-                    ModuleMessage::Event(event_msg) => {
-                        match event_msg.event_type {
-                            EventType::PaymentRequestCreated => {
-                                info!("Payment request created event received");
-                            }
-                            EventType::PaymentSettled => {
-                                info!("Payment settled event received");
-                            }
-                            EventType::PaymentFailed => {
-                                warn!("Payment failed event received");
-                            }
-                            _ => {
-                                // Ignore other events
+                        ModuleMessage::Event(event_msg) => {
+                            match event_msg.event_type {
+                                EventType::PaymentRequestCreated => {
+                                    info!("Payment request created event received");
+                                }
+                                EventType::PaymentSettled => {
+                                    info!("Payment settled event received");
+                                }
+                                EventType::PaymentFailed => {
+                                    warn!("Payment failed event received");
+                                }
+                                _ => {
+                                    // Ignore other events
+                                }
                             }
                         }
+                        _ => {
+                            // Not an event message
+                        }
                     }
-                    _ => {
-                        // Not an event message
-                    }
-                }
                 }
             })
             .collect();
-        
+
         // Wait for all events in batch to be processed
         futures::future::join_all(futures).await;
     }
@@ -179,4 +195,3 @@ async fn main() -> Result<()> {
     warn!("Event receiver closed, module shutting down");
     Ok(())
 }
-

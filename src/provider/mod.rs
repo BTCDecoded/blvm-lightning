@@ -12,8 +12,8 @@ use serde_json::Value;
 use std::str::FromStr;
 
 // Define types first, then submodules can import them
-pub mod lnbits;
 pub mod ldk;
+pub mod lnbits;
 pub mod stub;
 
 /// Lightning provider type
@@ -81,34 +81,34 @@ pub fn create_provider(
         ProviderType::LNBits => {
             let api_url = ctx.get_config_or("lightning.lnbits.api_url", "");
             let api_key = ctx.get_config_or("lightning.lnbits.api_key", "");
-            let wallet_id = ctx.get_config("lightning.lnbits.wallet_id").map(|s| s.to_string());
-            
+            let wallet_id = ctx
+                .get_config("lightning.lnbits.wallet_id")
+                .map(|s| s.to_string());
+
             let config = lnbits::LNBitsConfig {
                 api_url: api_url.to_string(),
                 api_key: api_key.to_string(),
                 wallet_id,
             };
-            
+
             Ok(Box::new(lnbits::LNBitsProvider::new(config)?))
         }
         ProviderType::LDK => {
             let data_dir = ctx.data_dir.clone();
             let network = ctx.get_config_or("lightning.ldk.network", "testnet");
-            let node_private_key = ctx.get_config("lightning.ldk.node_private_key")
+            let node_private_key = ctx
+                .get_config("lightning.ldk.node_private_key")
                 .and_then(|s| hex::decode(s).ok())
                 .map(|v| v.into_iter().collect());
-            
+
             let config = ldk::LDKConfig {
                 data_dir: std::path::PathBuf::from(data_dir),
                 network: network.to_string(),
                 node_private_key,
             };
-            
+
             Ok(Box::new(ldk::LDKProvider::new(config)?))
         }
-        ProviderType::Stub => {
-            Ok(Box::new(stub::StubProvider::new()))
-        }
+        ProviderType::Stub => Ok(Box::new(stub::StubProvider::new())),
     }
 }
-

@@ -4,8 +4,8 @@ use blvm_node::module::ipc::client::ModuleIpcClient;
 use blvm_node::module::ipc::protocol::{
     EventMessage, LogLevel, ModuleMessage, RequestMessage, RequestPayload, ResponsePayload,
 };
-use blvm_node::module::EventType;
 use blvm_node::module::traits::ModuleError;
+use blvm_node::module::EventType;
 use futures::StreamExt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -87,7 +87,10 @@ impl ModuleClient {
                         // No event available - continue
                     }
                     Err(e) => {
-                        error!("Error receiving event for module {}: {}", module_id_for_events, e);
+                        error!(
+                            "Error receiving event for module {}: {}",
+                            module_id_for_events, e
+                        );
                         break;
                     }
                 }
@@ -104,7 +107,10 @@ impl ModuleClient {
     }
 
     /// Subscribe to events
-    pub async fn subscribe_events(&mut self, event_types: Vec<EventType>) -> Result<(), ModuleError> {
+    pub async fn subscribe_events(
+        &mut self,
+        event_types: Vec<EventType>,
+    ) -> Result<(), ModuleError> {
         let correlation_id = self.ipc_client.lock().await.next_correlation_id();
         let request = RequestMessage {
             correlation_id,
@@ -118,7 +124,9 @@ impl ModuleClient {
             Ok(())
         } else {
             Err(ModuleError::IpcError(
-                response.error.unwrap_or_else(|| "Unknown error".to_string()),
+                response
+                    .error
+                    .unwrap_or_else(|| "Unknown error".to_string()),
             ))
         }
     }
@@ -157,4 +165,3 @@ impl ModuleClient {
         Arc::clone(&self.ipc_client)
     }
 }
-

@@ -3,17 +3,17 @@
 //! Full LDK integration for Rust-native Lightning payments.
 //! Provides channel management, peer connections, and payment processing.
 
-use crate::provider::{ProviderType, LightningProvider, PaymentVerificationResult};
 use crate::error::LightningError;
+use crate::provider::{LightningProvider, PaymentVerificationResult, ProviderType};
 use async_trait::async_trait;
+use bitcoin::Network;
+use lightning_invoice::Invoice;
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn, error};
-use lightning_invoice::Invoice;
-use bitcoin::Network;
-use secp256k1::{SecretKey, PublicKey, Secp256k1};
-use std::path::PathBuf;
-use std::collections::HashMap;
+use tracing::{debug, error, info, warn};
 
 /// LDK provider configuration
 #[derive(Debug, Clone)]
@@ -46,12 +46,16 @@ pub struct LDKProvider {
 impl LDKProvider {
     /// Create a new LDK provider
     pub fn new(config: LDKConfig) -> Result<Self, LightningError> {
-        info!("Initializing LDK provider: network={}, data_dir={:?}", config.network, config.data_dir);
-        
+        info!(
+            "Initializing LDK provider: network={}, data_dir={:?}",
+            config.network, config.data_dir
+        );
+
         // Create data directory if it doesn't exist
-        std::fs::create_dir_all(&config.data_dir)
-            .map_err(|e| LightningError::ConfigError(format!("Failed to create data directory: {}", e)))?;
-        
+        std::fs::create_dir_all(&config.data_dir).map_err(|e| {
+            LightningError::ConfigError(format!("Failed to create data directory: {}", e))
+        })?;
+
         // Determine network
         let network = match config.network.to_lowercase().as_str() {
             "mainnet" => Network::Bitcoin,
@@ -59,16 +63,21 @@ impl LDKProvider {
             "regtest" => Network::Regtest,
             "signet" => Network::Signet,
             _ => {
-                warn!("Unknown network '{}', defaulting to testnet", config.network);
+                warn!(
+                    "Unknown network '{}', defaulting to testnet",
+                    config.network
+                );
                 Network::Testnet
             }
         };
-        
+
         // Initialize or load node keys
         let secp = Secp256k1::new();
         let (node_secret_key, node_public_key) = if let Some(key_bytes) = &config.node_private_key {
             if key_bytes.len() != 32 {
-                return Err(LightningError::ConfigError("Node private key must be 32 bytes".to_string()));
+                return Err(LightningError::ConfigError(
+                    "Node private key must be 32 bytes".to_string(),
+                ));
             }
             let mut key_array = [0u8; 32];
             key_array.copy_from_slice(key_bytes);
@@ -78,10 +87,11 @@ impl LDKProvider {
             (secret_key, public_key)
         } else {
             // Generate new keys
-            let secret_key = SecretKey::from_slice(&rand::random::<[u8; 32]>())
-                .map_err(|e| LightningError::ConfigError(format!("Failed to generate key: {}", e)))?;
+            let secret_key = SecretKey::from_slice(&rand::random::<[u8; 32]>()).map_err(|e| {
+                LightningError::ConfigError(format!("Failed to generate key: {}", e))
+            })?;
             let public_key = PublicKey::from_secret_key(&secp, &secret_key);
-            
+
             // Save keys to disk for persistence
             let key_path = config.data_dir.join("node_key.hex");
             // secp256k1 0.12: serialize the key
@@ -89,15 +99,19 @@ impl LDKProvider {
             // Use the key's serialization method
             let mut key_bytes = [0u8; 32];
             key_bytes.copy_from_slice(&secret_key[..]);
-            std::fs::write(&key_path, hex::encode(key_bytes))
-                .map_err(|e| LightningError::ConfigError(format!("Failed to save node key: {}", e)))?;
-            
+            std::fs::write(&key_path, hex::encode(key_bytes)).map_err(|e| {
+                LightningError::ConfigError(format!("Failed to save node key: {}", e))
+            })?;
+
             info!("Generated new node keys, saved to {:?}", key_path);
             (secret_key, public_key)
         };
-        
-        info!("LDK provider initialized: node_id={}", hex::encode(node_public_key.serialize()));
-        
+
+        info!(
+            "LDK provider initialized: node_id={}",
+            hex::encode(node_public_key.serialize())
+        );
+
         Ok(Self {
             config,
             node_secret_key,
@@ -108,7 +122,7 @@ impl LDKProvider {
             secp,
         })
     }
-    
+
     /// Load node keys from disk
     fn load_keys(data_dir: &PathBuf) -> Result<(SecretKey, PublicKey), LightningError> {
         let key_path = data_dir.join("node_key.hex");
@@ -117,7 +131,9 @@ impl LDKProvider {
         let key_bytes = hex::decode(key_hex.trim())
             .map_err(|e| LightningError::ConfigError(format!("Invalid key hex: {}", e)))?;
         if key_bytes.len() != 32 {
-            return Err(LightningError::ConfigError("Node key must be 32 bytes".to_string()));
+            return Err(LightningError::ConfigError(
+                "Node key must be 32 bytes".to_string(),
+            ));
         }
         let mut key_array = [0u8; 32];
         key_array.copy_from_slice(&key_bytes);
@@ -137,19 +153,25 @@ impl LightningProvider for LDKProvider {
         payment_hash: &[u8; 32],
         payment_id: &str,
     ) -> Result<PaymentVerificationResult, LightningError> {
-        debug!("Verifying payment via LDK: payment_id={}, payment_hash={}", payment_id, hex::encode(payment_hash));
+        debug!(
+            "Verifying payment via LDK: payment_id={}, payment_hash={}",
+            payment_id,
+            hex::encode(payment_hash)
+        );
 
         // 1. Parse invoice using lightning-invoice
-        let parsed_invoice: Invoice = invoice.parse()
-            .map_err(|e| LightningError::InvoiceError(format!("Failed to parse invoice: {:?}", e)))?;
-        
+        let parsed_invoice: Invoice = invoice.parse().map_err(|e| {
+            LightningError::InvoiceError(format!("Failed to parse invoice: {:?}", e))
+        })?;
+
         // 2. Verify payment hash matches invoice
         // lightning-invoice 0.2: payment_hash() returns &Sha256, convert to bytes
         let invoice_payment_hash = parsed_invoice.payment_hash();
         // Convert hash to bytes via hex string (sha256::Hash Display outputs hex)
         let hash_str = format!("{}", invoice_payment_hash.0);
-        let hash_bytes = hex::decode(hash_str)
-            .map_err(|e| LightningError::InvoiceError(format!("Failed to decode payment hash: {}", e)))?;
+        let hash_bytes = hex::decode(hash_str).map_err(|e| {
+            LightningError::InvoiceError(format!("Failed to decode payment hash: {}", e))
+        })?;
         let mut invoice_hash_bytes = [0u8; 32];
         invoice_hash_bytes.copy_from_slice(&hash_bytes[..32]);
         if invoice_hash_bytes != *payment_hash {
@@ -164,7 +186,7 @@ impl LightningProvider for LDKProvider {
                 }),
             });
         }
-        
+
         // 3. Check payment tracker for payment status
         let tracker = self.payment_tracker.read().await;
         if let Some((amount_msats, timestamp, confirmed)) = tracker.get(payment_hash) {
@@ -179,19 +201,20 @@ impl LightningProvider for LDKProvider {
                 }),
             });
         }
-        
+
         // 4. Payment not found in tracker - check if invoice is valid
         // lightning-invoice 0.2: use amount_pico_btc() and convert to msats
         // 1 BTC = 10^12 pico BTC = 10^11 msats, so 1 pico BTC = 0.1 msats
         // For integer math: (pico_btc + 5) / 10 rounds to nearest msat
-        let amount_msats = parsed_invoice.amount_pico_btc()
+        let amount_msats = parsed_invoice
+            .amount_pico_btc()
             .map(|pico_btc| (pico_btc + 5) / 10)
             .unwrap_or(0);
-        
+
         // For now, if invoice is valid and payment_hash matches, we consider it verified
         // In a full implementation, this would query the channel manager for HTLC status
         let verified = true; // Simplified: assume payment is verified if invoice is valid
-        
+
         // Store in tracker
         drop(tracker);
         let mut tracker = self.payment_tracker.write().await;
@@ -200,7 +223,7 @@ impl LightningProvider for LDKProvider {
             .unwrap()
             .as_secs();
         tracker.insert(*payment_hash, (amount_msats, timestamp, verified));
-        
+
         Ok(PaymentVerificationResult {
             verified,
             amount_msats: Some(amount_msats),
@@ -220,12 +243,15 @@ impl LightningProvider for LDKProvider {
         description: &str,
         expiry_seconds: u64,
     ) -> Result<String, LightningError> {
-        debug!("Creating invoice via LDK: amount={} msats, description={}", amount_msats, description);
+        debug!(
+            "Creating invoice via LDK: amount={} msats, description={}",
+            amount_msats, description
+        );
 
-        use lightning_invoice::{Currency, InvoiceBuilder};
         use bitcoin_hashes::sha256;
         use bitcoin_hashes::Hash;
-        
+        use lightning_invoice::{Currency, InvoiceBuilder};
+
         // 1. Generate payment hash and secret
         let payment_secret_bytes: [u8; 32] = rand::random();
         let payment_hash = sha256::Hash::hash(&payment_secret_bytes);
@@ -235,21 +261,21 @@ impl LightningProvider for LDKProvider {
             .map_err(|e| LightningError::ProcessorError(format!("Failed to decode hash: {}", e)))?;
         let mut payment_hash_bytes = [0u8; 32];
         payment_hash_bytes.copy_from_slice(&hash_bytes[..32]);
-        
+
         // 2. Determine currency based on network
         // Note: lightning-invoice 0.2 only supports Bitcoin and BitcoinTestnet
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
             Network::Regtest => Currency::BitcoinTestnet, // Use testnet for regtest
-            Network::Signet => Currency::BitcoinTestnet, // Use testnet for signet
+            Network::Signet => Currency::BitcoinTestnet,  // Use testnet for signet
             Network::Testnet4 => Currency::BitcoinTestnet, // Use testnet for testnet4
         };
-        
+
         // 3. Build invoice using lightning-invoice 0.2 API
         // Convert msats to pico BTC: 1 msat = 10 pico BTC (since 1 pico BTC = 0.1 msats)
         let amount_pico_btc = amount_msats * 10;
-        
+
         // Build invoice with all required fields
         // lightning-invoice 0.2 requires: description, payment_hash, timestamp, and signature
         // bitcoin_hashes 0.3 is aligned with lightning-invoice 0.2 dependencies (see Cargo.toml)
@@ -265,29 +291,38 @@ impl LightningProvider for LDKProvider {
                 // Use the node's actual private key for signing
                 self.secp.sign_recoverable(hash, &self.node_secret_key)
             })
-            .map_err(|e| LightningError::ProcessorError(format!("Failed to build invoice: {:?}", e)))?;
-        
+            .map_err(|e| {
+                LightningError::ProcessorError(format!("Failed to build invoice: {:?}", e))
+            })?;
+
         // 4. Convert to BOLT11 string
         let invoice_string = invoice.to_string();
-        
+
         // 5. Store invoice in storage
         let mut storage = self.invoice_storage.write().await;
         storage.insert(payment_hash_bytes, invoice_string.clone());
-        
-        info!("Created LDK invoice: payment_hash={}, amount={} msats", hex::encode(payment_hash_bytes), amount_msats);
-        
+
+        info!(
+            "Created LDK invoice: payment_hash={}, amount={} msats",
+            hex::encode(payment_hash_bytes),
+            amount_msats
+        );
+
         Ok(invoice_string)
     }
 
     async fn is_payment_confirmed(&self, payment_hash: &[u8; 32]) -> Result<bool, LightningError> {
-        debug!("Checking payment confirmation via LDK: payment_hash={}", hex::encode(payment_hash));
-        
+        debug!(
+            "Checking payment confirmation via LDK: payment_hash={}",
+            hex::encode(payment_hash)
+        );
+
         // Check payment tracker
         let tracker = self.payment_tracker.read().await;
         if let Some((_amount, _timestamp, confirmed)) = tracker.get(payment_hash) {
             return Ok(*confirmed);
         }
-        
+
         // Payment not found - return false
         // In a full implementation, this would query the channel manager
         Ok(false)
@@ -297,4 +332,3 @@ impl LightningProvider for LDKProvider {
         ProviderType::LDK
     }
 }
-
