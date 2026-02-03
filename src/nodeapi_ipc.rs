@@ -902,27 +902,60 @@ impl NodeAPI for NodeApiIpc {
         std::collections::HashMap<String, Vec<blvm_node::module::metrics::manager::Metric>>,
         ModuleError,
     > {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        self.request(
+            RequestPayload::GetAllMetrics,
+            blvm_node::module::ipc::protocol::MessageType::GetAllMetrics,
+            |payload| match payload {
+                ResponsePayload::AllMetrics(metrics) => Ok(metrics),
+                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+            },
+        )
+        .await
     }
 
     async fn call_module(
         &self,
-        _target_module_id: Option<&str>,
-        _method: &str,
-        _params: Vec<u8>,
+        target_module_id: Option<&str>,
+        method: &str,
+        params: Vec<u8>,
     ) -> Result<Vec<u8>, ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        self.request(
+            RequestPayload::CallModule {
+                target_module_id: target_module_id.map(|s| s.to_string()),
+                method: method.to_string(),
+                params,
+            },
+            blvm_node::module::ipc::protocol::MessageType::CallModule,
+            |payload| match payload {
+                ResponsePayload::ModuleApiResponse(response) => Ok(response),
+                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+            },
+        )
+        .await
     }
 
     async fn register_module_api(
         &self,
         _api: Arc<dyn blvm_node::module::inter_module::api::ModuleAPI>,
     ) -> Result<(), ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        // Module API registration cannot be done over IPC as the API implementation
+        // (Arc<dyn ModuleAPI>) cannot be serialized. This must be handled via
+        // module-side registration mechanism, not through the NodeAPI IPC interface.
+        Err(ModuleError::OperationError(
+            "Module API registration must be done via module-side registration, not IPC".to_string(),
+        ))
     }
 
     async fn unregister_module_api(&self) -> Result<(), ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        self.request(
+            RequestPayload::UnregisterModuleApi,
+            blvm_node::module::ipc::protocol::MessageType::UnregisterModuleApi,
+            |payload| match payload {
+                ResponsePayload::ModuleApiUnregistered => Ok(()),
+                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+            },
+        )
+        .await
     }
 
     async fn send_mesh_packet_to_module(
@@ -931,34 +964,85 @@ impl NodeAPI for NodeApiIpc {
         _packet_data: Vec<u8>,
         _peer_addr: String,
     ) -> Result<(), ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        // This method is for the node to send packets to modules, not for modules to call over IPC.
+        // Modules should use send_mesh_packet_to_peer() instead.
+        Err(ModuleError::OperationError(
+            "send_mesh_packet_to_module is not available over IPC - use send_mesh_packet_to_peer instead".to_string(),
+        ))
     }
 
     async fn send_stratum_v2_message_to_peer(
         &self,
-        _peer_addr: String,
-        _message_data: Vec<u8>,
+        peer_addr: String,
+        message_data: Vec<u8>,
     ) -> Result<(), ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        self.request(
+            RequestPayload::SendStratumV2MessageToPeer {
+                peer_addr,
+                message_data,
+            },
+            blvm_node::module::ipc::protocol::MessageType::SendStratumV2MessageToPeer,
+            |payload| match payload {
+                ResponsePayload::Bool(success) => {
+                    if success {
+                        Ok(())
+                    } else {
+                        Err(ModuleError::OperationError(
+                            "Failed to send Stratum V2 message".to_string(),
+                        ))
+                    }
+                }
+                _ => Err(ModuleError::OperationError(
+                    "Invalid response format".to_string(),
+                )),
+            },
+        )
+        .await
     }
 
     async fn get_module_health(
         &self,
-        _module_id: &str,
+        module_id: &str,
     ) -> Result<Option<blvm_node::module::process::monitor::ModuleHealth>, ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        self.request(
+            RequestPayload::GetModuleHealth {
+                module_id: module_id.to_string(),
+            },
+            blvm_node::module::ipc::protocol::MessageType::GetModuleHealth,
+            |payload| match payload {
+                ResponsePayload::ModuleHealth(health) => Ok(health),
+                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+            },
+        )
+        .await
     }
 
     async fn get_all_module_health(
         &self,
     ) -> Result<Vec<(String, blvm_node::module::process::monitor::ModuleHealth)>, ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        self.request(
+            RequestPayload::GetAllModuleHealth,
+            blvm_node::module::ipc::protocol::MessageType::GetAllModuleHealth,
+            |payload| match payload {
+                ResponsePayload::AllModuleHealth(health) => Ok(health),
+                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+            },
+        )
+        .await
     }
 
     async fn report_module_health(
         &self,
-        _health: blvm_node::module::process::monitor::ModuleHealth,
+        health: blvm_node::module::process::monitor::ModuleHealth,
     ) -> Result<(), ModuleError> {
-        Err(ModuleError::OperationError("Not implemented".to_string()))
+        self.request(
+            RequestPayload::ReportModuleHealth { health },
+            blvm_node::module::ipc::protocol::MessageType::ReportModuleHealth,
+            |payload| match payload {
+                ResponsePayload::HealthReported => Ok(()),
+                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+            },
+        )
+        .await
     }
 }
