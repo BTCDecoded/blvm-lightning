@@ -72,6 +72,17 @@ capabilities = [
 ]
 ```
 
+## Dependencies
+
+### Version Notes
+
+This module uses `bitcoin_hashes = "0.3"` to match `lightning-invoice 0.2` requirements. This version differs from other BLVM crates (which use `0.11.0` or `0.12.x`) but is isolated to this module only and does not affect other components.
+
+**Isolation:** The version conflict is managed by:
+- Keeping `bitcoin_hashes` types internal to this module
+- Using type conversion when interfacing with other BLVM modules
+- Not exposing `bitcoin_hashes` types in the public API
+
 ## Events
 
 ### Subscribed Events

@@ -47,6 +47,9 @@ lightning-invoice = "0.2"
 # However, bitcoin 0.32 may require newer versions - we'll use dependency resolution
 bitcoin = { version = "0.32", features = ["std"] }
 # Force alignment with lightning-invoice 0.2 dependencies
+# NOTE: Version conflict with other BLVM crates
+# lightning-invoice 0.2 requires bitcoin_hashes 0.3
+# This is isolated to this module only - does not affect other crates
 bitcoin_hashes = "0.3"  # Match lightning-invoice 0.2
 secp256k1 = "0.12"  # Match lightning-invoice 0.2
 rand = "0.8"

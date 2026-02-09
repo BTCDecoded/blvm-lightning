@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     // Get socket path (from args, env, or default)
     let socket_path = args
         .socket_path
-        .or_else(|| std::env::var("BLLVM_MODULE_SOCKET").ok().map(PathBuf::from))
+        .or_else(|| std::env::var("BLVM_MODULE_SOCKET").ok().map(PathBuf::from))
         .or_else(|| {
             std::env::var("MODULE_SOCKET_DIR")
                 .ok()
