@@ -1,8 +1,8 @@
-# bllvm-lightning API Documentation
+# blvm-lightning API Documentation
 
 ## Overview
 
-The `bllvm-lightning` module provides Lightning Network payment processing with support for multiple providers (LNBits, LDK, Stub).
+The `blvm-lightning` module provides Lightning Network payment processing with support for multiple providers (LNBits, LDK, Stub).
 
 ## Core Components
 

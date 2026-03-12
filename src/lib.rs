@@ -1,4 +1,4 @@
-//! Lightning Network payment processor module for bllvm-node
+//! Lightning Network payment processor module for blvm-node
 
 pub mod client;
 pub mod error;

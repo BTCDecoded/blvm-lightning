@@ -1,7 +1,7 @@
-//! bllvm-lightning - Lightning Network payment processor module
+//! blvm-lightning - Lightning Network payment processor module
 //!
 //! This module provides Lightning Network payment processing capabilities
-//! for bllvm-node, including invoice verification, payment routing, and
+//! for blvm-node, including invoice verification, payment routing, and
 //! channel management.
 
 use anyhow::Result;
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     let module_id = args
         .module_id
         .or_else(|| std::env::var("MODULE_NAME").ok())
-        .unwrap_or_else(|| "bllvm-lightning".to_string());
+        .unwrap_or_else(|| "blvm-lightning".to_string());
 
     // Get socket path (from args, env, or default)
     let socket_path = args
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|| PathBuf::from("data/modules/modules.sock"));
 
     info!(
-        "bllvm-lightning module starting... (module_id: {}, socket: {:?})",
+        "blvm-lightning module starting... (module_id: {}, socket: {:?})",
         module_id, socket_path
     );
 
@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
     let mut client = match ModuleClient::connect(
         socket_path_for_connect,
         module_id.clone(),
-        "bllvm-lightning".to_string(),
+        "blvm-lightning".to_string(),
         env!("CARGO_PKG_VERSION").to_string(),
     )
     .await
@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
         config: std::collections::HashMap::new(),
         data_dir: args
             .data_dir
-            .unwrap_or_else(|| PathBuf::from("data/modules/bllvm-lightning"))
+            .unwrap_or_else(|| PathBuf::from("data/modules/blvm-lightning"))
             .to_string_lossy()
             .to_string(),
         socket_path: socket_path.clone().to_string_lossy().to_string(),

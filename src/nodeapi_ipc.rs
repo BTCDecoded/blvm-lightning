@@ -907,7 +907,9 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::GetAllMetrics,
             |payload| match payload {
                 ResponsePayload::AllMetrics(metrics) => Ok(metrics),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
@@ -928,7 +930,9 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::CallModule,
             |payload| match payload {
                 ResponsePayload::ModuleApiResponse(response) => Ok(response),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
@@ -942,7 +946,8 @@ impl NodeAPI for NodeApiIpc {
         // (Arc<dyn ModuleAPI>) cannot be serialized. This must be handled via
         // module-side registration mechanism, not through the NodeAPI IPC interface.
         Err(ModuleError::OperationError(
-            "Module API registration must be done via module-side registration, not IPC".to_string(),
+            "Module API registration must be done via module-side registration, not IPC"
+                .to_string(),
         ))
     }
 
@@ -952,7 +957,9 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::UnregisterModuleApi,
             |payload| match payload {
                 ResponsePayload::ModuleApiUnregistered => Ok(()),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
@@ -1011,7 +1018,9 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::GetModuleHealth,
             |payload| match payload {
                 ResponsePayload::ModuleHealth(health) => Ok(health),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
@@ -1025,7 +1034,9 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::GetAllModuleHealth,
             |payload| match payload {
                 ResponsePayload::AllModuleHealth(health) => Ok(health),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await
@@ -1040,7 +1051,9 @@ impl NodeAPI for NodeApiIpc {
             blvm_node::module::ipc::protocol::MessageType::ReportModuleHealth,
             |payload| match payload {
                 ResponsePayload::HealthReported => Ok(()),
-                _ => Err(ModuleError::OperationError("Unexpected response type".to_string())),
+                _ => Err(ModuleError::OperationError(
+                    "Unexpected response type".to_string(),
+                )),
             },
         )
         .await

@@ -1,10 +1,10 @@
-# bllvm-lightning
+# blvm-lightning
 
-Lightning Network payment processor module for bllvm-node.
+Lightning Network payment processor module for blvm-node.
 
 ## Overview
 
-This module provides Lightning Network payment processing capabilities for bllvm-node. It supports **multiple Lightning providers**:
+This module provides Lightning Network payment processing capabilities for blvm-node. It supports **multiple Lightning providers**:
 - **LNBits** (REST API) - Simple, wallet/accounting built-in
 - **LDK** (Lightning Development Kit) - Rust-native, full control
 - **Stub** (for testing) - Mock implementation
@@ -13,11 +13,11 @@ This module provides Lightning Network payment processing capabilities for bllvm
 
 ```bash
 # Install via cargo
-cargo install bllvm-lightning
+cargo install blvm-lightning
 
-# Or install via cargo-bllvm-module
-cargo install cargo-bllvm-module
-cargo bllvm-module install bllvm-lightning
+# Or install via cargo-blvm-module
+cargo install cargo-blvm-module
+cargo blvm-module install blvm-lightning
 ```
 
 ## Configuration
@@ -60,11 +60,11 @@ provider = "stub"
 The module includes a `module.toml` manifest:
 
 ```toml
-name = "bllvm-lightning"
+name = "blvm-lightning"
 version = "0.1.0"
 description = "Lightning Network payment processor"
 author = "Bitcoin Commons Team"
-entry_point = "bllvm-lightning"
+entry_point = "blvm-lightning"
 
 capabilities = [
     "read_blockchain",

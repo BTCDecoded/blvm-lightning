@@ -1,8 +1,8 @@
-name = "bllvm-lightning"
+name = "blvm-lightning"
 version = "0.1.0"
-description = "Lightning Network payment processor module for bllvm-node"
+description = "Lightning Network payment processor module for blvm-node"
 author = "Bitcoin Commons Team"
-entry_point = "bllvm-lightning"
+entry_point = "blvm-lightning"
 
 capabilities = [
     "read_blockchain",
