@@ -26,6 +26,7 @@ tokio = { version = "1.48", features = ["full"] }
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+toml = "0.8"
 
 # Error handling
 anyhow = "1.0"
@@ -57,17 +58,17 @@ rand = "0.8"
 # Hex encoding/decoding
 hex = "0.4"
 
-# Command-line argument parsing
-clap = { version = "4.0", features = ["derive"] }
-
 # Futures for async streams
 futures = "0.3"
 
 # Async trait support
 async-trait = "0.1"
 
-# Local development: Use [patch.crates-io] to override with local paths
-# For production/CI, these patches are removed and crates.io versions are used
+# blvm-sdk for ModuleBootstrap (env-based bootstrap)
+blvm-sdk = { path = "../blvm-sdk", default-features = false, features = ["node"] }
+# blvm-sdk-macros for #[config]
+blvm-sdk-macros = { path = "../blvm-sdk/crates/blvm-sdk-macros" }
+
 [patch.crates-io]
 blvm-node = { path = "../blvm-node" }
 blvm-protocol = { path = "../blvm-protocol" }
@@ -78,4 +79,5 @@ blvm-sdk = { path = "../blvm-sdk" }
 # Testing
 tokio-test = "0.4"
 mockito = "1.0"
+tempfile = "3.8"
 

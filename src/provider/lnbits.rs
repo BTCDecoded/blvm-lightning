@@ -224,4 +224,26 @@ impl LightningProvider for LNBitsProvider {
     fn provider_type(&self) -> ProviderType {
         ProviderType::LNBits
     }
+
+    async fn get_balance(&self) -> Result<Option<u64>, LightningError> {
+        // LNBits API: GET /api/v1/wallet returns balance (X-Api-Key identifies wallet)
+        let endpoint = "/wallet";
+
+        #[derive(Deserialize)]
+        struct WalletResponse {
+            /// Balance in millisatoshis (LNBits API)
+            balance: Option<u64>,
+        }
+
+        match self
+            .request::<WalletResponse>(reqwest::Method::GET, &endpoint, None)
+            .await
+        {
+            Ok(wallet) => Ok(wallet.balance.map(|msats| msats / 1000)), // Convert msats to sats
+            Err(e) => {
+                debug!("LNBits wallet balance not available: {}", e);
+                Ok(None)
+            }
+        }
+    }
 }

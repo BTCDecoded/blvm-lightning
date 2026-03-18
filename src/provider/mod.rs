@@ -46,6 +46,15 @@ pub struct PaymentVerificationResult {
     pub metadata: Value,
 }
 
+/// Channel info for list_channels
+#[derive(Debug, Clone)]
+pub struct ChannelInfo {
+    pub channel_id: String,
+    pub peer_pubkey: Vec<u8>,
+    pub capacity_sats: u64,
+    pub state: String,
+}
+
 /// Lightning provider trait
 #[async_trait]
 pub trait LightningProvider: Send + Sync {
@@ -70,6 +79,37 @@ pub trait LightningProvider: Send + Sync {
 
     /// Get the provider type
     fn provider_type(&self) -> ProviderType;
+
+    /// Get wallet/channel balance in sats (optional; returns None if not supported)
+    async fn get_balance(&self) -> Result<Option<u64>, LightningError>;
+
+    /// Pay a Lightning invoice (outgoing payment). Returns Err if not supported.
+    async fn pay_invoice(&self, _invoice: &str) -> Result<PayInvoiceResult, LightningError> {
+        Err(LightningError::ProcessorError(
+            "Outgoing payment not implemented for this provider".to_string(),
+        ))
+    }
+
+    /// List Lightning channels (capacity, state). Returns empty vec if not supported.
+    async fn list_channels(&self) -> Result<Vec<ChannelInfo>, LightningError> {
+        Ok(Vec::new())
+    }
+
+    /// Close a Lightning channel. Returns Err if not supported.
+    async fn close_channel(&self, _channel_id: &str) -> Result<(), LightningError> {
+        Err(LightningError::ProcessorError(
+            "Channel management not implemented for this provider".to_string(),
+        ))
+    }
+}
+
+/// Result of pay_invoice attempt
+#[derive(Debug, Clone)]
+pub struct PayInvoiceResult {
+    pub payment_id: String,
+    pub route_found: bool,
+    pub route_hops: usize,
+    pub route_cost_msats: u64,
 }
 
 /// Create a Lightning provider based on type and context

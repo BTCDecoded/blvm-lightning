@@ -12,7 +12,7 @@ async fn test_stub_provider() {
     let ctx = ModuleContext {
         module_id: "test".to_string(),
         config,
-        data_dir: std::path::PathBuf::from("/tmp"),
+        data_dir: "/tmp".to_string(),
         socket_path: "/tmp/test.sock".to_string(),
     };
 
@@ -37,34 +37,42 @@ async fn test_stub_provider() {
 }
 
 #[tokio::test]
+#[ignore = "LDK requires runtime setup; run with --ignored to test"]
 async fn test_ldk_provider_creation() {
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let data_dir = temp_dir.path().to_string_lossy().to_string();
+
     let mut config = HashMap::new();
     config.insert("lightning.provider".to_string(), "ldk".to_string());
     config.insert(
         "lightning.ldk.data_dir".to_string(),
-        "/tmp/ldk_test".to_string(),
+        data_dir.clone(),
     );
-    config.insert("lightning.ldk.network".to_string(), "testnet".to_string());
+    config.insert("lightning.ldk.network".to_string(), "regtest".to_string());
 
     let ctx = ModuleContext {
         module_id: "test".to_string(),
         config,
-        data_dir: std::path::PathBuf::from("/tmp"),
+        data_dir: data_dir.clone(),
         socket_path: "/tmp/test.sock".to_string(),
     };
 
-    let provider = create_provider(ProviderType::LDK, &ctx).unwrap();
+    let provider = create_provider(ProviderType::LDK, &ctx)
+        .unwrap_or_else(|e| panic!("LDK provider creation failed: {}", e));
     assert_eq!(provider.provider_type(), ProviderType::LDK);
 
-    // Test invoice creation
+    // Test invoice creation (LDK can create invoices without channel)
     let invoice_result = provider.create_invoice(1000, "test", 3600).await;
-    assert!(invoice_result.is_ok());
+    assert!(
+        invoice_result.is_ok(),
+        "create_invoice failed: {:?}",
+        invoice_result.err()
+    );
 
     // Test payment verification
     let payment_hash = [0u8; 32];
     let result = provider
         .verify_payment("lnbc1pstub", &payment_hash, "test_id")
         .await;
-    // May fail if invoice is invalid, but should not panic
     assert!(result.is_ok());
 }

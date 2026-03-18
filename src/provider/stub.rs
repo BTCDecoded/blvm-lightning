@@ -71,4 +71,8 @@ impl LightningProvider for StubProvider {
     fn provider_type(&self) -> ProviderType {
         ProviderType::Stub
     }
+
+    async fn get_balance(&self) -> Result<Option<u64>, LightningError> {
+        Ok(Some(0))
+    }
 }

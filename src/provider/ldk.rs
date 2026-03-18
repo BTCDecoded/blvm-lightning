@@ -331,4 +331,9 @@ impl LightningProvider for LDKProvider {
     fn provider_type(&self) -> ProviderType {
         ProviderType::LDK
     }
+
+    async fn get_balance(&self) -> Result<Option<u64>, LightningError> {
+        // LDK channel balance would require channel manager integration
+        Ok(None)
+    }
 }
