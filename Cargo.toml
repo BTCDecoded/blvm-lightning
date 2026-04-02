@@ -16,9 +16,9 @@ path = "src/main.rs"
 
 [dependencies]
 # blvm-node for module system integration
-blvm-node = "0.1.0"
+blvm-node = ">=0.1, <1"
 # Protocol layer for transaction/block types
-blvm-protocol = "0.1.3"
+blvm-protocol = ">=0.1, <1"
 
 # Async runtime
 tokio = { version = "1.48", features = ["full"] }
