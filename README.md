@@ -61,7 +61,7 @@ The module includes a `module.toml` manifest:
 
 ```toml
 name = "blvm-lightning"
-version = "0.1.0"
+version = "0.1"
 description = "Lightning Network payment processor"
 author = "Bitcoin Commons Team"
 entry_point = "blvm-lightning"
