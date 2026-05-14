@@ -9,3 +9,8 @@ capabilities = [
     "subscribe_events",
 ]
 
+# CI fills url/sha256 on release — do not treat empty entries as real installs.
+[downloads]
+x86_64-linux   = { url = "", sha256 = "" }
+aarch64-linux  = { url = "", sha256 = "" }
+x86_64-windows = { url = "", sha256 = "" }
