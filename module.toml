@@ -1,5 +1,5 @@
 name = "blvm-lightning"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lightning Network payment processor module for blvm-node"
 author = "Bitcoin Commons Team"
 entry_point = "blvm-lightning"
@@ -11,6 +11,6 @@ capabilities = [
 
 # CI fills url/sha256 on release — do not treat empty entries as real installs.
 [downloads]
-x86_64-linux   = { url = "", sha256 = "" }
-aarch64-linux  = { url = "", sha256 = "" }
-x86_64-windows = { url = "", sha256 = "" }
+x86_64-linux  = { url = "https://github.com/BTCDecoded/blvm-lightning/releases/download/v0.1.1/blvm-lightning-x86_64-linux", sha256 = "bc2bdd3819ea5c9da3c7472016fd6786282b1361e3b77ea3ba9e69ce3562aeac" }
+aarch64-linux = { url = "https://github.com/BTCDecoded/blvm-lightning/releases/download/v0.1.1/blvm-lightning-aarch64-linux", sha256 = "685f597fe0a61d3f54ac52583ff080445712564707a8287d4c8850af0027c557" }
+x86_64-windows= { url = "https://github.com/BTCDecoded/blvm-lightning/releases/download/v0.1.1/blvm-lightning-x86_64-windows.exe", sha256 = "ae5efe2a7587c771ba11ce8be55843611dee49b51359c5ed274437423c08fc62" }

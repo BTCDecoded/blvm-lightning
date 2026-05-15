@@ -1,6 +1,6 @@
 [package]
 name = "blvm-lightning"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Bitcoin Commons Team"]
 description = "Lightning Network payment processor module for blvm-node"
@@ -61,20 +61,3 @@ blvm-sdk-macros = { version = ">=0.1, <1" }
 
 # Local monorepo: sibling paths override the version pins above.
 # Strip this section in CI/release (BTCDecoded/rust-ci/strip-patch-crates-io@main).
-[patch.crates-io]
-blvm-node = { path = "../blvm-node" }
-blvm-sdk = { path = "../blvm-sdk" }
-blvm-sdk-macros = { path = "../blvm-sdk/crates/blvm-sdk-macros" }
-blvm-protocol = { path = "../blvm-protocol" }
-blvm-consensus = { path = "../blvm-consensus" }
-blvm-primitives = { path = "../blvm-primitives" }
-blvm-secp256k1 = { path = "../blvm-secp256k1" }
-blvm-muhash = { path = "../blvm-muhash" }
-blvm-spec-lock = { path = "../blvm-spec-lock" }
-
-[dev-dependencies]
-# Testing
-tokio-test = "0.4"
-mockito = "1.0"
-tempfile = "3.8"
-
