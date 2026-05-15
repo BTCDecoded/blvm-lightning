@@ -17,13 +17,17 @@ pub struct LightningModule {
 #[module]
 impl LightningModule {
     #[on_event(PaymentRequestCreated, PaymentSettled, PaymentFailed)]
-    async fn on_payment_event(&self, event: &EventMessage, ctx: &InvocationContext) -> Result<(), ModuleError> {
+    async fn on_payment_event(
+        &self,
+        event: &EventMessage,
+        ctx: &InvocationContext,
+    ) -> Result<(), ModuleError> {
         let msg = ModuleMessage::Event(event.clone());
         let api = ctx.node_api().expect("node_api required");
         self.processor
             .handle_event(&msg, api.as_ref())
             .await
-            .map_err(|e| ModuleError::Other(e.to_string().into()))
+            .map_err(|e| ModuleError::Other(e.to_string()))
     }
 
     /// Show lightning module status (provider type).
@@ -43,7 +47,7 @@ impl LightningModule {
         let invoices = self
             .db
             .as_ref()
-            .map(|d| crate::invoice_store::load_invoices(d))
+            .map(crate::invoice_store::load_invoices)
             .unwrap_or_default();
         let out = if invoices.is_empty() {
             "No invoices stored.\n\
@@ -92,15 +96,17 @@ impl LightningModule {
         if inv.is_empty() {
             return Err(ModuleError::Other("Usage: pay-invoice <invoice>".into()));
         }
-        let node_api = ctx
-            .node_api()
-            .ok_or_else(|| ModuleError::Other("Node not connected (pay-invoice requires node API)".into()))?;
+        let node_api = ctx.node_api().ok_or_else(|| {
+            ModuleError::Other("Node not connected (pay-invoice requires node API)".into())
+        })?;
         let processor = Arc::clone(&self.processor);
         run_async(async move {
             processor
                 .pay_invoice(inv, node_api.as_ref())
                 .await
-                .map(|_| "Payment initiated. Check events for PaymentVerified/PaymentFailed.".into())
+                .map(|_| {
+                    "Payment initiated. Check events for PaymentVerified/PaymentFailed.".into()
+                })
                 .map_err(|e| anyhow::anyhow!("{}", e))
         })
     }
@@ -112,18 +118,27 @@ impl LightningModule {
         run_async(async move {
             let channels = processor.list_channels().await.unwrap_or_default();
             if channels.is_empty() {
-                Ok::<_, String>("No channels. LDK provider would list channels when connected.".into())
+                Ok::<_, String>(
+                    "No channels. LDK provider would list channels when connected.".into(),
+                )
             } else {
                 let mut out = format!("Channels ({}):\n", channels.len());
                 for (i, ch) in channels.iter().enumerate() {
                     let peer_hex = if ch.peer_pubkey.is_empty() {
                         "n/a".into()
                     } else {
-                        format!("{}...", hex::encode(&ch.peer_pubkey[..ch.peer_pubkey.len().min(8)]))
+                        format!(
+                            "{}...",
+                            hex::encode(&ch.peer_pubkey[..ch.peer_pubkey.len().min(8)])
+                        )
                     };
                     out.push_str(&format!(
                         "  {}. {} | {} sats | {} | peer={}\n",
-                        i + 1, ch.channel_id, ch.capacity_sats, ch.state, peer_hex
+                        i + 1,
+                        ch.channel_id,
+                        ch.capacity_sats,
+                        ch.state,
+                        peer_hex
                     ));
                 }
                 Ok::<_, String>(out)
@@ -133,14 +148,20 @@ impl LightningModule {
 
     /// Close a Lightning channel. Emits ChannelClosed on success.
     #[command]
-    fn close_channel(&self, ctx: &InvocationContext, channel_id: String) -> Result<String, ModuleError> {
+    fn close_channel(
+        &self,
+        ctx: &InvocationContext,
+        channel_id: String,
+    ) -> Result<String, ModuleError> {
         let cid = channel_id.trim();
         if cid.is_empty() {
-            return Err(ModuleError::Other("Usage: close-channel <channel_id>".into()));
+            return Err(ModuleError::Other(
+                "Usage: close-channel <channel_id>".into(),
+            ));
         }
-        let node_api = ctx
-            .node_api()
-            .ok_or_else(|| ModuleError::Other("Node not connected (close-channel requires node API)".into()))?;
+        let node_api = ctx.node_api().ok_or_else(|| {
+            ModuleError::Other("Node not connected (close-channel requires node API)".into())
+        })?;
         let processor = Arc::clone(&self.processor);
         run_async(async move {
             processor

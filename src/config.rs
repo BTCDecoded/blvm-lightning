@@ -92,10 +92,7 @@ impl LightningConfig {
             );
         }
         if let Some(ref k) = self.ldk.node_private_key {
-            m.insert(
-                "lightning.ldk.node_private_key".to_string(),
-                k.clone(),
-            );
+            m.insert("lightning.ldk.node_private_key".to_string(), k.clone());
         }
         m
     }

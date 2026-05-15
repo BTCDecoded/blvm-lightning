@@ -6,14 +6,17 @@
 use crate::error::LightningError;
 use crate::provider::{LightningProvider, PaymentVerificationResult, ProviderType};
 use async_trait::async_trait;
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::Network;
-use lightning_invoice::Invoice;
-use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
+
+type PaymentTrackerMap = HashMap<[u8; 32], (u64, u64, bool)>;
+type InvoiceStorageMap = HashMap<[u8; 32], String>;
 
 /// LDK provider configuration
 #[derive(Debug, Clone)]
@@ -28,6 +31,7 @@ pub struct LDKConfig {
 
 /// LDK provider implementation
 pub struct LDKProvider {
+    #[allow(dead_code)] // Kept for future persistence / diagnostics (paths, network string).
     config: LDKConfig,
     /// Node private key
     node_secret_key: SecretKey,
@@ -36,11 +40,11 @@ pub struct LDKProvider {
     /// Network (mainnet, testnet, regtest)
     network: Network,
     /// Payment hash tracking (payment_hash -> (amount_msats, timestamp, confirmed))
-    payment_tracker: Arc<RwLock<HashMap<[u8; 32], (u64, u64, bool)>>>,
+    payment_tracker: Arc<RwLock<PaymentTrackerMap>>,
     /// Invoice storage (payment_hash -> invoice_string)
-    invoice_storage: Arc<RwLock<HashMap<[u8; 32], String>>>,
+    invoice_storage: Arc<RwLock<InvoiceStorageMap>>,
     /// Secp256k1 context
-    secp: Secp256k1<secp256k1::All>,
+    secp: Secp256k1<bitcoin::secp256k1::All>,
 }
 
 impl LDKProvider {
@@ -94,11 +98,7 @@ impl LDKProvider {
 
             // Save keys to disk for persistence
             let key_path = config.data_dir.join("node_key.hex");
-            // secp256k1 0.12: serialize the key
-            // In 0.12, SecretKey implements Display or can be serialized via its inner bytes
-            // Use the key's serialization method
-            let mut key_bytes = [0u8; 32];
-            key_bytes.copy_from_slice(&secret_key[..]);
+            let key_bytes = secret_key.secret_bytes();
             std::fs::write(&key_path, hex::encode(key_bytes)).map_err(|e| {
                 LightningError::ConfigError(format!("Failed to save node key: {}", e))
             })?;
@@ -122,27 +122,6 @@ impl LDKProvider {
             secp,
         })
     }
-
-    /// Load node keys from disk
-    fn load_keys(data_dir: &PathBuf) -> Result<(SecretKey, PublicKey), LightningError> {
-        let key_path = data_dir.join("node_key.hex");
-        let key_hex = std::fs::read_to_string(&key_path)
-            .map_err(|e| LightningError::ConfigError(format!("Failed to read node key: {}", e)))?;
-        let key_bytes = hex::decode(key_hex.trim())
-            .map_err(|e| LightningError::ConfigError(format!("Invalid key hex: {}", e)))?;
-        if key_bytes.len() != 32 {
-            return Err(LightningError::ConfigError(
-                "Node key must be 32 bytes".to_string(),
-            ));
-        }
-        let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(&key_bytes);
-        let secp = Secp256k1::new();
-        let secret_key = SecretKey::from_slice(&key_array)
-            .map_err(|e| LightningError::ConfigError(format!("Invalid key: {}", e)))?;
-        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
-        Ok((secret_key, public_key))
-    }
 }
 
 #[async_trait]
@@ -160,21 +139,12 @@ impl LightningProvider for LDKProvider {
         );
 
         // 1. Parse invoice using lightning-invoice
-        let parsed_invoice: Invoice = invoice.parse().map_err(|e| {
+        let parsed_invoice: Bolt11Invoice = invoice.parse().map_err(|e| {
             LightningError::InvoiceError(format!("Failed to parse invoice: {:?}", e))
         })?;
 
         // 2. Verify payment hash matches invoice
-        // lightning-invoice 0.2: payment_hash() returns &Sha256, convert to bytes
-        let invoice_payment_hash = parsed_invoice.payment_hash();
-        // Convert hash to bytes via hex string (sha256::Hash Display outputs hex)
-        let hash_str = format!("{}", invoice_payment_hash.0);
-        let hash_bytes = hex::decode(hash_str).map_err(|e| {
-            LightningError::InvoiceError(format!("Failed to decode payment hash: {}", e))
-        })?;
-        let mut invoice_hash_bytes = [0u8; 32];
-        invoice_hash_bytes.copy_from_slice(&hash_bytes[..32]);
-        if invoice_hash_bytes != *payment_hash {
+        if parsed_invoice.payment_hash().to_byte_array() != *payment_hash {
             return Ok(PaymentVerificationResult {
                 verified: false,
                 amount_msats: None,
@@ -203,13 +173,7 @@ impl LightningProvider for LDKProvider {
         }
 
         // 4. Payment not found in tracker - check if invoice is valid
-        // lightning-invoice 0.2: use amount_pico_btc() and convert to msats
-        // 1 BTC = 10^12 pico BTC = 10^11 msats, so 1 pico BTC = 0.1 msats
-        // For integer math: (pico_btc + 5) / 10 rounds to nearest msat
-        let amount_msats = parsed_invoice
-            .amount_pico_btc()
-            .map(|pico_btc| (pico_btc + 5) / 10)
-            .unwrap_or(0);
+        let amount_msats = parsed_invoice.amount_milli_satoshis().unwrap_or(0);
 
         // For now, if invoice is valid and payment_hash matches, we consider it verified
         // In a full implementation, this would query the channel manager for HTLC status
@@ -248,48 +212,33 @@ impl LightningProvider for LDKProvider {
             amount_msats, description
         );
 
-        use bitcoin_hashes::sha256;
-        use bitcoin_hashes::Hash;
-        use lightning_invoice::{Currency, InvoiceBuilder};
-
-        // 1. Generate payment hash and secret
-        let payment_secret_bytes: [u8; 32] = rand::random();
-        let payment_hash = sha256::Hash::hash(&payment_secret_bytes);
-        // Convert hash to bytes via hex string (works across bitcoin_hashes versions)
-        let hash_str = format!("{}", payment_hash);
-        let hash_bytes = hex::decode(hash_str)
-            .map_err(|e| LightningError::ProcessorError(format!("Failed to decode hash: {}", e)))?;
-        let mut payment_hash_bytes = [0u8; 32];
-        payment_hash_bytes.copy_from_slice(&hash_bytes[..32]);
+        // 1. Preimage + payment hash, and a `payment_secret` (mandatory in BOLT11 for current `lightning-invoice`).
+        let preimage: [u8; 32] = rand::random();
+        let payment_hash = sha256::Hash::hash(&preimage);
+        let payment_hash_bytes = payment_hash.to_byte_array();
 
         // 2. Determine currency based on network
-        // Note: lightning-invoice 0.2 only supports Bitcoin and BitcoinTestnet
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
-            Network::Regtest => Currency::BitcoinTestnet, // Use testnet for regtest
-            Network::Signet => Currency::BitcoinTestnet,  // Use testnet for signet
-            Network::Testnet4 => Currency::BitcoinTestnet, // Use testnet for testnet4
+            Network::Regtest => Currency::BitcoinTestnet,
+            Network::Signet => Currency::BitcoinTestnet,
+            Network::Testnet4 => Currency::BitcoinTestnet,
         };
 
-        // 3. Build invoice using lightning-invoice 0.2 API
-        // Convert msats to pico BTC: 1 msat = 10 pico BTC (since 1 pico BTC = 0.1 msats)
-        let amount_pico_btc = amount_msats * 10;
-
-        // Build invoice with all required fields
-        // lightning-invoice 0.2 requires: description, payment_hash, timestamp, and signature
-        // bitcoin_hashes 0.3 is aligned with lightning-invoice 0.2 dependencies (see Cargo.toml)
-        // The sha256::Hash type from bitcoin_hashes 0.3 is compatible with InvoiceBuilder
+        // 3. Build and sign invoice (API from `lightning-invoice` 0.32).
+        let payment_secret = PaymentSecret(rand::random());
         let invoice = InvoiceBuilder::new(currency)
-            .amount_pico_btc(amount_pico_btc)
+            .amount_milli_satoshis(amount_msats)
             .description(description.to_string())
             .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
             .expiry_time(std::time::Duration::from_secs(expiry_seconds))
-            .min_final_cltv_expiry(144) // Standard 144 blocks
+            .min_final_cltv_expiry_delta(144)
             .current_timestamp()
             .build_signed(|hash| {
-                // Use the node's actual private key for signing
-                self.secp.sign_recoverable(hash, &self.node_secret_key)
+                self.secp
+                    .sign_ecdsa_recoverable(hash, &self.node_secret_key)
             })
             .map_err(|e| {
                 LightningError::ProcessorError(format!("Failed to build invoice: {:?}", e))

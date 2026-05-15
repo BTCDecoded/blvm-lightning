@@ -10,6 +10,12 @@ use tracing::debug;
 /// Stub provider implementation
 pub struct StubProvider;
 
+impl Default for StubProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StubProvider {
     /// Create a new stub provider
     pub fn new() -> Self {

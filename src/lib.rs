@@ -1,11 +1,11 @@
 //! Lightning Network payment processor module for blvm-node
 
 pub mod api;
-pub mod module;
 pub mod config;
 pub mod error;
 pub mod invoice;
 pub mod invoice_store;
+pub mod module;
 pub mod processor;
 pub mod provider;
 pub mod storage;

@@ -67,7 +67,10 @@ impl LightningProcessor {
                     ProviderType::LDK => "ldk",
                     ProviderType::Stub => "stub",
                 };
-                let _ = tree.insert(b"lightning_config:provider_type", provider_type_str.as_bytes());
+                let _ = tree.insert(
+                    b"lightning_config:provider_type",
+                    provider_type_str.as_bytes(),
+                );
                 let _ = tree.insert(b"lightning_config:channel_count", &0u64.to_be_bytes());
                 let _ = tree.insert(b"lightning_config:total_capacity_sats", &0u64.to_be_bytes());
             }
@@ -99,7 +102,11 @@ impl LightningProcessor {
                             debug!("Processing payment request: {}", payment_id);
                             if let Some(invoice_str) = invoice {
                                 if let Some(ref db) = self.invoice_db {
-                                    crate::invoice_store::store_invoice(db, payment_id, invoice_str);
+                                    crate::invoice_store::store_invoice(
+                                        db,
+                                        payment_id,
+                                        invoice_str,
+                                    );
                                 }
                                 self.process_payment(invoice_str, payment_id, node_api)
                                     .await?;
@@ -367,7 +374,9 @@ impl LightningProcessor {
         }
         let mut arr = [0u8; 32];
         arr.copy_from_slice(&hash_bytes);
-        self.provider.verify_payment(invoice, &arr, payment_id).await
+        self.provider
+            .verify_payment(invoice, &arr, payment_id)
+            .await
     }
 
     /// Get wallet balance in sats (for ModuleAPI)
@@ -428,10 +437,7 @@ impl LightningProcessor {
                         debug!("Failed to publish PaymentRouteFailed: {}", pub_e);
                     }
                 } else {
-                    let payload = EventPayload::PaymentFailed {
-                        payment_id,
-                        reason,
-                    };
+                    let payload = EventPayload::PaymentFailed { payment_id, reason };
                     if let Err(pub_e) = node_api
                         .publish_event(EventType::PaymentFailed, payload)
                         .await

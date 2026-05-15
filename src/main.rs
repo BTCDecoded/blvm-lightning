@@ -16,7 +16,11 @@ const MODULE_NAME: &str = "blvm-lightning";
 #[tokio::main]
 async fn main() -> Result<()> {
     let bootstrap = ModuleBootstrap::init_module(MODULE_NAME);
-    let db = ModuleDb::open_or_temp_with_migrations(&bootstrap.data_dir, MODULE_NAME, migrations!(1 => up_v1))?;
+    let db = ModuleDb::open_or_temp_with_migrations(
+        &bootstrap.data_dir,
+        MODULE_NAME,
+        migrations!(1 => up_v1),
+    )?;
 
     let setup = |node_api: Arc<dyn blvm_node::module::traits::NodeAPI>,
                  db: Arc<dyn blvm_node::storage::database::Database>,
@@ -27,7 +31,12 @@ async fn main() -> Result<()> {
             let (ctx, _config) = bootstrap.context_with_config::<LightningConfig>(&data_dir);
             let processor = LightningProcessor::new(&ctx, Arc::clone(&node_api))
                 .await
-                .map_err(|e| blvm_node::module::traits::ModuleError::Other(format!("Failed to create processor: {}", e)))?;
+                .map_err(|e| {
+                    blvm_node::module::traits::ModuleError::Other(format!(
+                        "Failed to create processor: {}",
+                        e
+                    ))
+                })?;
             let processor = Arc::new(processor);
             let lightning_api = Arc::new(LightningModuleApi::new(Arc::clone(&processor)));
             if let Err(e) = node_api.register_module_api(lightning_api).await {

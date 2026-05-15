@@ -28,8 +28,8 @@ impl ModuleAPI for LightningModuleApi {
     ) -> Result<Vec<u8>, ModuleError> {
         match method {
             "create_invoice" => {
-                let params_json: serde_json::Value = serde_json::from_slice(params)
-                    .unwrap_or(serde_json::json!({}));
+                let params_json: serde_json::Value =
+                    serde_json::from_slice(params).unwrap_or(serde_json::json!({}));
                 let amount_msats = params_json
                     .get("amount_msats")
                     .and_then(|v| v.as_u64())
@@ -50,18 +50,22 @@ impl ModuleAPI for LightningModuleApi {
                     .processor
                     .create_invoice(amount_msats, description, expiry_seconds)
                     .await
-                    .map_err(|e| ModuleError::OperationError(format!("create_invoice failed: {}", e)))?;
+                    .map_err(|e| {
+                        ModuleError::OperationError(format!("create_invoice failed: {}", e))
+                    })?;
                 serde_json::to_vec(&serde_json::json!({ "invoice": invoice }))
                     .map_err(|e| ModuleError::OperationError(format!("Serialization error: {}", e)))
             }
             "verify_payment" => {
-                let params_json: serde_json::Value = serde_json::from_slice(params)
-                    .unwrap_or(serde_json::json!({}));
+                let params_json: serde_json::Value =
+                    serde_json::from_slice(params).unwrap_or(serde_json::json!({}));
                 let invoice = params_json
                     .get("invoice")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| {
-                        ModuleError::OperationError("verify_payment requires invoice (string)".to_string())
+                        ModuleError::OperationError(
+                            "verify_payment requires invoice (string)".to_string(),
+                        )
                     })?;
                 let payment_hash = params_json
                     .get("payment_hash")
@@ -79,7 +83,9 @@ impl ModuleAPI for LightningModuleApi {
                     .processor
                     .verify_payment_api(invoice, payment_hash, payment_id)
                     .await
-                    .map_err(|e| ModuleError::OperationError(format!("verify_payment failed: {}", e)))?;
+                    .map_err(|e| {
+                        ModuleError::OperationError(format!("verify_payment failed: {}", e))
+                    })?;
                 serde_json::to_vec(&serde_json::json!({
                     "verified": result.verified,
                     "amount_msats": result.amount_msats,
@@ -89,11 +95,9 @@ impl ModuleAPI for LightningModuleApi {
                 .map_err(|e| ModuleError::OperationError(format!("Serialization error: {}", e)))
             }
             "get_balance" => {
-                let balance = self
-                    .processor
-                    .get_balance()
-                    .await
-                    .map_err(|e| ModuleError::OperationError(format!("get_balance failed: {}", e)))?;
+                let balance = self.processor.get_balance().await.map_err(|e| {
+                    ModuleError::OperationError(format!("get_balance failed: {}", e))
+                })?;
                 serde_json::to_vec(&serde_json::json!({
                     "balance_sats": balance,
                     "supported": balance.is_some()

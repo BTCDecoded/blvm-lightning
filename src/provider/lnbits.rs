@@ -93,7 +93,7 @@ impl LNBitsProvider {
 impl LightningProvider for LNBitsProvider {
     async fn verify_payment(
         &self,
-        invoice: &str,
+        _invoice: &str,
         payment_hash: &[u8; 32],
         payment_id: &str,
     ) -> Result<PaymentVerificationResult, LightningError> {
@@ -236,7 +236,7 @@ impl LightningProvider for LNBitsProvider {
         }
 
         match self
-            .request::<WalletResponse>(reqwest::Method::GET, &endpoint, None)
+            .request::<WalletResponse>(reqwest::Method::GET, endpoint, None)
             .await
         {
             Ok(wallet) => Ok(wallet.balance.map(|msats| msats / 1000)), // Convert msats to sats

@@ -1,6 +1,6 @@
 //! Unit tests for Lightning providers
 
-use blvm_lightning::provider::{create_provider, LightningProvider, ProviderType};
+use blvm_lightning::provider::{create_provider, ProviderType};
 use blvm_node::module::traits::ModuleContext;
 use std::collections::HashMap;
 
@@ -44,10 +44,7 @@ async fn test_ldk_provider_creation() {
 
     let mut config = HashMap::new();
     config.insert("lightning.provider".to_string(), "ldk".to_string());
-    config.insert(
-        "lightning.ldk.data_dir".to_string(),
-        data_dir.clone(),
-    );
+    config.insert("lightning.ldk.data_dir".to_string(), data_dir.clone());
     config.insert("lightning.ldk.network".to_string(), "regtest".to_string());
 
     let ctx = ModuleContext {
