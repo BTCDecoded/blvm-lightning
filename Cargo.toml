@@ -15,8 +15,8 @@ name = "blvm-lightning"
 path = "src/main.rs"
 
 [dependencies]
-# blvm-node for module system integration
-blvm-node = ">=0.1, <1"
+# blvm-node for module system integration (sled: ModuleDb)
+blvm-node = { version = ">=0.1, <1", features = ["sled"] }
 # Protocol layer for transaction/block types
 blvm-protocol = ">=0.1, <1"
 
@@ -61,3 +61,11 @@ blvm-sdk-macros = { version = ">=0.1, <1" }
 
 # Local monorepo: sibling paths override the version pins above.
 # Strip this section in CI/release (BTCDecoded/rust-ci/strip-patch-crates-io@main).
+[patch.crates-io]
+blvm-node = { path = "../blvm-node" }
+blvm-protocol = { path = "../blvm-protocol" }
+blvm-sdk = { path = "../blvm-sdk" }
+blvm-sdk-macros = { path = "../blvm-sdk/crates/blvm-sdk-macros" }
+
+[dev-dependencies]
+tempfile = "3.8"
