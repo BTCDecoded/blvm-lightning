@@ -329,6 +329,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",
@@ -339,8 +340,6 @@ dependencies = [
 [[package]]
 name = "blvm-muhash"
 version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12b488787aed02ee7c5cd8a7bdf2f855e7b7d0678f745a25236041cd35f225b5"
 dependencies = [
  "chacha20",
  "cipher",
@@ -3620,3 +3619,35 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "blvm-consensus"
+version = "0.1.26"
+
+[[patch.unused]]
+name = "blvm-node"
+version = "0.1.13"
+
+[[patch.unused]]
+name = "blvm-primitives"
+version = "0.1.16"
+
+[[patch.unused]]
+name = "blvm-protocol"
+version = "0.1.8"
+
+[[patch.unused]]
+name = "blvm-sdk"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "blvm-sdk-macros"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "blvm-secp256k1"
+version = "0.1.8"
+
+[[patch.unused]]
+name = "blvm-spec-lock"
+version = "0.1.27"
