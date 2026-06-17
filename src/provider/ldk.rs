@@ -6,9 +6,9 @@
 use crate::error::LightningError;
 use crate::provider::{LightningProvider, PaymentVerificationResult, ProviderType};
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::Network;
+use bitcoin::hashes::{Hash, sha256};
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
 use std::collections::HashMap;
 use std::sync::Arc;

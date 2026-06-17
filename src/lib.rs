@@ -15,5 +15,5 @@ pub use config::LightningConfig;
 pub use module::LightningModule;
 pub use processor::{LightningProcessor, LightningStatus};
 pub use provider::{
-    create_provider, ldk, lnbits, stub, LightningProvider, PaymentVerificationResult, ProviderType,
+    LightningProvider, PaymentVerificationResult, ProviderType, create_provider, ldk, lnbits, stub,
 };

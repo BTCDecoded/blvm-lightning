@@ -1,6 +1,6 @@
 //! Unit tests for Lightning providers
 
-use blvm_lightning::provider::{create_provider, ProviderType};
+use blvm_lightning::provider::{ProviderType, create_provider};
 use blvm_node::module::traits::ModuleContext;
 use std::collections::HashMap;
 
