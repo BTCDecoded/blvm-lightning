@@ -35,7 +35,7 @@ impl LNBitsProvider {
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .map_err(|e| {
-                LightningError::ProcessorError(format!("Failed to create HTTP client: {}", e))
+                LightningError::ProcessorError(format!("Failed to create HTTP client: {e}"))
             })?;
 
         Ok(Self {
@@ -68,7 +68,7 @@ impl LNBitsProvider {
         }
 
         let response = request.send().await.map_err(|e| {
-            LightningError::ProcessorError(format!("LNBits API request failed: {}", e))
+            LightningError::ProcessorError(format!("LNBits API request failed: {e}"))
         })?;
 
         if !response.status().is_success() {
@@ -78,13 +78,12 @@ impl LNBitsProvider {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(LightningError::ProcessorError(format!(
-                "LNBits API error: {} - {}",
-                status, error_text
+                "LNBits API error: {status} - {error_text}"
             )));
         }
 
         response.json::<T>().await.map_err(|e| {
-            LightningError::ProcessorError(format!("Failed to parse LNBits response: {}", e))
+            LightningError::ProcessorError(format!("Failed to parse LNBits response: {e}"))
         })
     }
 }
@@ -102,7 +101,7 @@ impl LightningProvider for LNBitsProvider {
         // LNBits API: Check payment status
         // GET /api/v1/payments/{payment_hash}
         let payment_hash_hex = hex::encode(payment_hash);
-        let endpoint = format!("/payments/{}", payment_hash_hex);
+        let endpoint = format!("/payments/{payment_hash_hex}");
 
         #[derive(Deserialize)]
         struct PaymentResponse {
@@ -164,7 +163,7 @@ impl LightningProvider for LNBitsProvider {
         // LNBits API: Create invoice
         // POST /api/v1/payments
         let endpoint = if let Some(wallet_id) = &self.config.wallet_id {
-            format!("/payments?wallet={}", wallet_id)
+            format!("/payments?wallet={wallet_id}")
         } else {
             "/payments".to_string()
         };
@@ -194,7 +193,7 @@ impl LightningProvider for LNBitsProvider {
                 reqwest::Method::POST,
                 &endpoint,
                 Some(serde_json::to_value(request_body).map_err(|e| {
-                    LightningError::ProcessorError(format!("Failed to serialize request: {}", e))
+                    LightningError::ProcessorError(format!("Failed to serialize request: {e}"))
                 })?),
             )
             .await?;
@@ -205,7 +204,7 @@ impl LightningProvider for LNBitsProvider {
 
     async fn is_payment_confirmed(&self, payment_hash: &[u8; 32]) -> Result<bool, LightningError> {
         let payment_hash_hex = hex::encode(payment_hash);
-        let endpoint = format!("/payments/{}", payment_hash_hex);
+        let endpoint = format!("/payments/{payment_hash_hex}");
 
         #[derive(Deserialize)]
         struct PaymentResponse {

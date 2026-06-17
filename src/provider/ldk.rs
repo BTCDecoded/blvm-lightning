@@ -57,7 +57,7 @@ impl LDKProvider {
 
         // Create data directory if it doesn't exist
         std::fs::create_dir_all(&config.data_dir).map_err(|e| {
-            LightningError::ConfigError(format!("Failed to create data directory: {}", e))
+            LightningError::ConfigError(format!("Failed to create data directory: {e}"))
         })?;
 
         // Determine network
@@ -86,21 +86,20 @@ impl LDKProvider {
             let mut key_array = [0u8; 32];
             key_array.copy_from_slice(key_bytes);
             let secret_key = SecretKey::from_slice(&key_array)
-                .map_err(|e| LightningError::ConfigError(format!("Invalid private key: {}", e)))?;
+                .map_err(|e| LightningError::ConfigError(format!("Invalid private key: {e}")))?;
             let public_key = PublicKey::from_secret_key(&secp, &secret_key);
             (secret_key, public_key)
         } else {
             // Generate new keys
-            let secret_key = SecretKey::from_slice(&rand::random::<[u8; 32]>()).map_err(|e| {
-                LightningError::ConfigError(format!("Failed to generate key: {}", e))
-            })?;
+            let secret_key = SecretKey::from_slice(&rand::random::<[u8; 32]>())
+                .map_err(|e| LightningError::ConfigError(format!("Failed to generate key: {e}")))?;
             let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
             // Save keys to disk for persistence
             let key_path = config.data_dir.join("node_key.hex");
             let key_bytes = secret_key.secret_bytes();
             std::fs::write(&key_path, hex::encode(key_bytes)).map_err(|e| {
-                LightningError::ConfigError(format!("Failed to save node key: {}", e))
+                LightningError::ConfigError(format!("Failed to save node key: {e}"))
             })?;
 
             info!("Generated new node keys, saved to {:?}", key_path);
@@ -139,9 +138,9 @@ impl LightningProvider for LDKProvider {
         );
 
         // 1. Parse invoice using lightning-invoice
-        let parsed_invoice: Bolt11Invoice = invoice.parse().map_err(|e| {
-            LightningError::InvoiceError(format!("Failed to parse invoice: {:?}", e))
-        })?;
+        let parsed_invoice: Bolt11Invoice = invoice
+            .parse()
+            .map_err(|e| LightningError::InvoiceError(format!("Failed to parse invoice: {e:?}")))?;
 
         // 2. Verify payment hash matches invoice
         if parsed_invoice.payment_hash().to_byte_array() != *payment_hash {
@@ -241,7 +240,7 @@ impl LightningProvider for LDKProvider {
                     .sign_ecdsa_recoverable(hash, &self.node_secret_key)
             })
             .map_err(|e| {
-                LightningError::ProcessorError(format!("Failed to build invoice: {:?}", e))
+                LightningError::ProcessorError(format!("Failed to build invoice: {e:?}"))
             })?;
 
         // 4. Convert to BOLT11 string

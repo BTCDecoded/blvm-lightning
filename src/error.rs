@@ -32,6 +32,6 @@ pub enum LightningError {
 
 impl From<ModuleError> for LightningError {
     fn from(err: ModuleError) -> Self {
-        LightningError::ModuleError(format!("{:?}", err))
+        LightningError::ModuleError(format!("{err:?}"))
     }
 }

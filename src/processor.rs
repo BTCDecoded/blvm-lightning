@@ -44,7 +44,7 @@ impl LightningProcessor {
         // Determine provider type from config
         let provider_type_str = ctx.get_config_or("lightning.provider", "lnbits");
         let provider_type = ProviderType::from_str(&provider_type_str)
-            .map_err(|e| LightningError::ConfigError(format!("Invalid provider type: {}", e)))?;
+            .map_err(|e| LightningError::ConfigError(format!("Invalid provider type: {e}")))?;
 
         info!(
             "Initializing Lightning processor with provider: {:?}",
@@ -365,7 +365,7 @@ impl LightningProcessor {
         payment_id: &str,
     ) -> Result<crate::provider::PaymentVerificationResult, LightningError> {
         let hash_bytes = hex::decode(payment_hash_hex).map_err(|e| {
-            LightningError::ProcessorError(format!("Invalid payment_hash hex: {}", e))
+            LightningError::ProcessorError(format!("Invalid payment_hash hex: {e}"))
         })?;
         if hash_bytes.len() != 32 {
             return Err(LightningError::ProcessorError(

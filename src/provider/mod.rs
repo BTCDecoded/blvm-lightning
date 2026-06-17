@@ -32,7 +32,7 @@ impl FromStr for ProviderType {
             "lnbits" => Ok(ProviderType::LNBits),
             "ldk" => Ok(ProviderType::LDK),
             "stub" => Ok(ProviderType::Stub),
-            _ => Err(format!("Unknown provider type: {}", s)),
+            _ => Err(format!("Unknown provider type: {s}")),
         }
     }
 }

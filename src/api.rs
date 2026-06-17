@@ -51,10 +51,10 @@ impl ModuleAPI for LightningModuleApi {
                     .create_invoice(amount_msats, description, expiry_seconds)
                     .await
                     .map_err(|e| {
-                        ModuleError::OperationError(format!("create_invoice failed: {}", e))
+                        ModuleError::OperationError(format!("create_invoice failed: {e}"))
                     })?;
                 serde_json::to_vec(&serde_json::json!({ "invoice": invoice }))
-                    .map_err(|e| ModuleError::OperationError(format!("Serialization error: {}", e)))
+                    .map_err(|e| ModuleError::OperationError(format!("Serialization error: {e}")))
             }
             "verify_payment" => {
                 let params_json: serde_json::Value =
@@ -84,7 +84,7 @@ impl ModuleAPI for LightningModuleApi {
                     .verify_payment_api(invoice, payment_hash, payment_id)
                     .await
                     .map_err(|e| {
-                        ModuleError::OperationError(format!("verify_payment failed: {}", e))
+                        ModuleError::OperationError(format!("verify_payment failed: {e}"))
                     })?;
                 serde_json::to_vec(&serde_json::json!({
                     "verified": result.verified,
@@ -92,21 +92,21 @@ impl ModuleAPI for LightningModuleApi {
                     "timestamp": result.timestamp,
                     "metadata": result.metadata
                 }))
-                .map_err(|e| ModuleError::OperationError(format!("Serialization error: {}", e)))
+                .map_err(|e| ModuleError::OperationError(format!("Serialization error: {e}")))
             }
             "get_balance" => {
-                let balance = self.processor.get_balance().await.map_err(|e| {
-                    ModuleError::OperationError(format!("get_balance failed: {}", e))
-                })?;
+                let balance =
+                    self.processor.get_balance().await.map_err(|e| {
+                        ModuleError::OperationError(format!("get_balance failed: {e}"))
+                    })?;
                 serde_json::to_vec(&serde_json::json!({
                     "balance_sats": balance,
                     "supported": balance.is_some()
                 }))
-                .map_err(|e| ModuleError::OperationError(format!("Serialization error: {}", e)))
+                .map_err(|e| ModuleError::OperationError(format!("Serialization error: {e}")))
             }
             _ => Err(ModuleError::OperationError(format!(
-                "Unknown method: {}",
-                method
+                "Unknown method: {method}"
             ))),
         }
     }

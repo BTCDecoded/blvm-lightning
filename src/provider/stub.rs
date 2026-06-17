@@ -66,7 +66,7 @@ impl LightningProvider for StubProvider {
 
         // Stub: Return a fake invoice
         // In production, this would be a real BOLT11 invoice
-        Ok(format!("lnbc{}u1pstub_invoice", amount_msats))
+        Ok(format!("lnbc{amount_msats}u1pstub_invoice"))
     }
 
     async fn is_payment_confirmed(&self, _payment_hash: &[u8; 32]) -> Result<bool, LightningError> {

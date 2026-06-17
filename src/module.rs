@@ -84,7 +84,7 @@ impl LightningModule {
             processor
                 .create_invoice(amount_msats, &desc, expiry)
                 .await
-                .map(|inv| format!("Invoice:\n{}", inv))
+                .map(|inv| format!("Invoice:\n{inv}"))
                 .map_err(|e| anyhow::anyhow!("Failed to create invoice: {}", e))
         })
     }
@@ -167,7 +167,7 @@ impl LightningModule {
             processor
                 .close_channel(cid, node_api.as_ref())
                 .await
-                .map(|_| format!("Channel {} closed.", cid))
+                .map(|_| format!("Channel {cid} closed."))
                 .map_err(|e| anyhow::anyhow!("{}", e))
         })
     }

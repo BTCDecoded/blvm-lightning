@@ -55,7 +55,7 @@ async fn test_ldk_provider_creation() {
     };
 
     let provider = create_provider(ProviderType::LDK, &ctx)
-        .unwrap_or_else(|e| panic!("LDK provider creation failed: {}", e));
+        .unwrap_or_else(|e| panic!("LDK provider creation failed: {e}"));
     assert_eq!(provider.provider_type(), ProviderType::LDK);
 
     // Test invoice creation (LDK can create invoices without channel)

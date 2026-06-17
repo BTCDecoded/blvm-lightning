@@ -33,8 +33,7 @@ async fn main() -> Result<()> {
                 .await
                 .map_err(|e| {
                     blvm_node::module::traits::ModuleError::Other(format!(
-                        "Failed to create processor: {}",
-                        e
+                        "Failed to create processor: {e}"
                     ))
                 })?;
             let processor = Arc::new(processor);
