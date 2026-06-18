@@ -5,63 +5,61 @@ Lightning Network payment processor module for blvm-node.
 ## Overview
 
 This module provides Lightning Network payment processing capabilities for blvm-node. It supports **multiple Lightning providers**:
-- **LNBits** (REST API) - Simple, wallet/accounting built-in
-- **LDK** (Lightning Development Kit) - Rust-native, full control
-- **Stub** (for testing) - Mock implementation
+
+- **LNBits** (REST API) — simple wallet/accounting integration
+- **LDK** (Lightning Development Kit) — Rust-native, full control
+- **Stub** (for testing) — mock implementation (default)
 
 ## Installation
 
-```bash
-# Install via cargo
-cargo install blvm-lightning
+Pin in node `blvm.toml`:
 
-# Or install via cargo-blvm-module
-cargo install cargo-blvm-module
-cargo blvm-module install blvm-lightning
+```toml
+[modules]
+blvm-lightning = "0.1.*"
 ```
+
+Or build from source and place the binary + `module.toml` under the module search path. See [blvm-docs — Lightning module](https://github.com/BTCDecoded/blvm-docs/blob/main/src/modules/lightning.md).
 
 ## Configuration
 
-Create a `config.toml` in the module directory:
+Create `config.toml` in `<modules.data_dir>/blvm-lightning/` with **flat top-level keys** (no `[lightning]` wrapper — invalid tables are **silently ignored** and the module falls back to **`stub`**):
 
 ### LNBits Provider (Recommended)
 
 ```toml
-[lightning]
-provider = "lnbits"  # or "ldk" or "stub"
+provider = "lnbits"
 
-[lightning.lnbits]
+[lnbits]
 api_url = "https://lnbits.example.com"
 api_key = "your_lnbits_api_key"
-wallet_id = "optional_wallet_id"  # Optional, for specific wallet
+wallet_id = "optional_wallet_id"  # Optional
 ```
 
 ### LDK Provider
 
 ```toml
-[lightning]
 provider = "ldk"
 
-[lightning.ldk]
-data_dir = "data/ldk"
+[ldk]
 network = "testnet"  # or "mainnet" or "regtest"
-node_private_key = "hex_encoded_private_key"  # Optional, will generate if not provided
+node_private_key = "hex_encoded_private_key"  # Optional; generated when unset
 ```
 
 ### Stub Provider (Testing)
 
 ```toml
-[lightning]
 provider = "stub"
 ```
 
+Node overrides: `[modules.blvm-lightning]` with the same flat keys (passed as `MODULE_CONFIG_*` on spawn).
+
 ## Module Manifest
 
-The module includes a `module.toml` manifest:
+See `module.toml` in this repo and **`registry/modules.json`** in the `blvm` release — do not hardcode semver in operator docs.
 
 ```toml
 name = "blvm-lightning"
-version = "0.1"
 description = "Lightning Network payment processor"
 author = "Bitcoin Commons Team"
 entry_point = "blvm-lightning"
@@ -74,51 +72,38 @@ capabilities = [
 
 ## Dependencies
 
-### Version Notes
-
-This module uses `bitcoin_hashes = "0.3"` to match `lightning-invoice 0.2` requirements. This version differs from other BLVM crates (which use `0.11.0` or `0.12.x`) but is isolated to this module only and does not affect other components.
-
-**Isolation:** The version conflict is managed by:
-- Keeping `bitcoin_hashes` types internal to this module
-- Using type conversion when interfacing with other BLVM modules
-- Not exposing `bitcoin_hashes` types in the public API
+This module uses `bitcoin_hashes = "0.3"` to match `lightning-invoice 0.2` requirements. That version differs from other BLVM crates but is isolated to this module.
 
 ## Events
 
-### Subscribed Events
-- `PaymentRequestCreated` - New payment request
-- `PaymentSettled` - Payment confirmed on-chain
-- `PaymentFailed` - Payment failed
+### Subscribed
 
-### Published Events
-- `PaymentVerified` - Lightning payment verified
-- `PaymentRouteFound` - Payment route discovered
-- `PaymentRouteFailed` - Payment routing failed
-- `ChannelOpened` - Lightning channel opened
-- `ChannelClosed` - Lightning channel closed
+- `PaymentRequestCreated`
+- `PaymentSettled`
+- `PaymentFailed`
+
+### Published
+
+- `PaymentRequestCreated`
+- `PaymentVerified`
+- `PaymentSettled`
+- `PaymentFailed`
+- `PaymentRouteFound` / `PaymentRouteFailed`
+- `ChannelClosed`
+
+`ChannelOpened` exists on the shared `EventType` enum but is **not emitted** by this module today.
 
 ## Provider Comparison
 
 | Feature | LNBits | LDK | Stub |
 |---------|--------|-----|------|
-| **Status** | ✅ Production-ready | ✅ Fully implemented | ✅ Testing |
 | **API Type** | REST (HTTP) | Rust-native (lightning-invoice) | None |
-| **Real Lightning** | ✅ Yes | ✅ Yes | ❌ No |
-| **External Service** | ✅ Yes | ❌ No | ❌ No |
-| **Invoice Creation** | ✅ Via API | ✅ Native | ✅ Mock |
-| **Payment Verification** | ✅ Via API | ✅ Native | ✅ Mock |
+| **Real Lightning** | Yes | Yes | No (mock) |
+| **External Service** | Yes | No | No |
 | **Best For** | Payment processing | Full control, Rust-native | Testing |
 
-## Usage
-
-The module automatically selects the provider based on configuration. All providers implement the same interface, so switching providers is just a config change:
-
-```toml
-# Switch from LNBits to LDK
-[lightning]
-provider = "ldk"  # Just change this!
-```
+Switch providers by changing `provider` and the matching `[lnbits]` / `[ldk]` table — no code changes.
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License — see LICENSE file for details.

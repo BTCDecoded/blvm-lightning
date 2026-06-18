@@ -86,18 +86,20 @@ Factory function to create a provider from configuration.
 - `PaymentVerified` - Lightning payment verified
 - `PaymentRouteFound` - Payment route discovered
 - `PaymentRouteFailed` - Payment routing failed
-- `ChannelOpened` - Lightning channel opened
 - `ChannelClosed` - Lightning channel closed
 
+(`ChannelOpened` exists on `EventType` but is **not emitted** by this module.)
+
 ## Configuration
+
+Use **flat top-level keys** in `config.toml` (no `[lightning]` wrapper — invalid tables are silently ignored; module falls back to **`stub`**).
 
 ### LNBits Provider
 
 ```toml
-[lightning]
 provider = "lnbits"
 
-[lightning.lnbits]
+[lnbits]
 api_url = "https://lnbits.example.com"
 api_key = "your_lnbits_api_key"
 wallet_id = "optional_wallet_id"
@@ -106,19 +108,16 @@ wallet_id = "optional_wallet_id"
 ### LDK Provider
 
 ```toml
-[lightning]
 provider = "ldk"
 
-[lightning.ldk]
-data_dir = "data/ldk"
-network = "testnet"  # "mainnet", "testnet", "regtest", "signet"
+[ldk]
+network = "testnet"  # "mainnet", "testnet", "regtest"
 node_private_key = "hex_encoded_private_key"  # Optional
 ```
 
 ### Stub Provider
 
 ```toml
-[lightning]
 provider = "stub"
 ```
 
@@ -157,9 +156,7 @@ if result.verified {
 Simply change the configuration:
 
 ```toml
-# Switch from LNBits to LDK
-[lightning]
-provider = "ldk"  # Just change this!
+provider = "ldk"  # was "lnbits"
 ```
 
 The module automatically uses the new provider on next initialization.
