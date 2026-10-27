@@ -28,6 +28,26 @@ pub struct LightningProcessor {
     invoice_db: Option<Arc<dyn blvm_node::storage::database::Database>>,
 }
 
+/// A missing module, a reply that is not JSON, or a payment with no confirmations yields no event.
+fn settled_from_payment_state(payment_id: &str, reply: Option<&[u8]>) -> Option<EventPayload> {
+    let value: serde_json::Value = serde_json::from_slice(reply?).ok()?;
+    let confirmations = value
+        .get("confirmation_count")
+        .and_then(|item| item.as_u64())
+        .unwrap_or(0);
+    if confirmations == 0 {
+        return None;
+    }
+    let tx_hash = value.get("tx_hash").and_then(|item| item.as_str()).and_then(|hex_str| {
+        blvm_node::storage::hashing::hash_from_rpc_hex(hex_str).ok()
+    })?;
+    Some(EventPayload::PaymentSettled {
+        payment_id: payment_id.to_string(),
+        tx_hash,
+        confirmations: confirmations as u32,
+    })
+}
+
 impl LightningProcessor {
     /// Get module status for CLI
     pub fn get_status(&self) -> LightningStatus {
@@ -232,23 +252,18 @@ impl LightningProcessor {
                 debug!("Failed to publish PaymentVerified: {}", e);
             }
 
-            // If payment state has on-chain tx with confirmations, publish PaymentSettled
-            if let Ok(Some(state)) = node_api.get_payment_state(payment_id).await {
-                debug!("Payment state for {}: {:?}", payment_id, state);
-                if let (Some(tx_hash), Some(confirmations)) = (state.tx_hash, state.confirmations) {
-                    if confirmations > 0 {
-                        let payload = EventPayload::PaymentSettled {
-                            payment_id: payment_id.to_string(),
-                            tx_hash,
-                            confirmations,
-                        };
-                        if let Err(e) = node_api
-                            .publish_event(EventType::PaymentSettled, payload)
-                            .await
-                        {
-                            debug!("Failed to publish PaymentSettled: {}", e);
-                        }
-                    }
+            // Settled on-chain state lives in blvm-payment. A missing module skips PaymentSettled.
+            let params = serde_json::to_vec(&serde_json::json!([payment_id])).unwrap_or_default();
+            let reply = node_api
+                .call_module(Some("blvm-payment"), "getpaymentstate", params)
+                .await
+                .ok();
+            if let Some(payload) = settled_from_payment_state(payment_id, reply.as_deref()) {
+                if let Err(e) = node_api
+                    .publish_event(EventType::PaymentSettled, payload)
+                    .await
+                {
+                    debug!("Failed to publish PaymentSettled: {}", e);
                 }
             }
         } else {
@@ -473,5 +488,42 @@ impl LightningProcessor {
     /// List Lightning channels (delegates to provider).
     pub async fn list_channels(&self) -> Result<Vec<crate::provider::ChannelInfo>, LightningError> {
         self.provider.list_channels().await
+    }
+}
+
+#[cfg(test)]
+mod settled_state_tests {
+    use super::settled_from_payment_state;
+    use blvm_node::module::ipc::protocol::EventPayload;
+
+    #[test]
+    fn a_missing_payment_module_skips_payment_settled() {
+        assert!(settled_from_payment_state("pay-1", None).is_none());
+    }
+
+    #[test]
+    fn an_unconfirmed_payment_skips_payment_settled() {
+        let reply = br#"{"confirmation_count":0,"tx_hash":"11"}"#;
+        assert!(settled_from_payment_state("pay-1", Some(reply)).is_none());
+    }
+
+    #[test]
+    fn a_confirmed_payment_publishes_payment_settled() {
+        let tx_hash = "ab".repeat(32);
+        let reply = format!(
+            r#"{{"confirmation_count":6,"tx_hash":"{tx_hash}"}}"#
+        );
+        match settled_from_payment_state("pay-1", Some(reply.as_bytes())) {
+            Some(EventPayload::PaymentSettled {
+                payment_id,
+                confirmations,
+                tx_hash: hash,
+            }) => {
+                assert_eq!(payment_id, "pay-1");
+                assert_eq!(confirmations, 6);
+                assert_eq!(hash, [0xab; 32]);
+            }
+            other => panic!("expected PaymentSettled, got {other:?}"),
+        }
     }
 }
