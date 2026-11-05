@@ -37,14 +37,12 @@ async fn test_stub_provider() {
 }
 
 #[tokio::test]
-#[ignore = "LDK requires runtime setup; run with --ignored to test"]
 async fn test_ldk_provider_creation() {
     let temp_dir = tempfile::tempdir().expect("temp dir");
     let data_dir = temp_dir.path().to_string_lossy().to_string();
 
     let mut config = HashMap::new();
     config.insert("lightning.provider".to_string(), "ldk".to_string());
-    config.insert("lightning.ldk.data_dir".to_string(), data_dir.clone());
     config.insert("lightning.ldk.network".to_string(), "regtest".to_string());
 
     let ctx = ModuleContext {
@@ -58,18 +56,43 @@ async fn test_ldk_provider_creation() {
         .unwrap_or_else(|e| panic!("LDK provider creation failed: {e}"));
     assert_eq!(provider.provider_type(), ProviderType::LDK);
 
-    // Test invoice creation (LDK can create invoices without channel)
-    let invoice_result = provider.create_invoice(1000, "test", 3600).await;
+    let invoice = provider
+        .create_invoice(1000, "test", 3600)
+        .await
+        .expect("create_invoice");
     assert!(
-        invoice_result.is_ok(),
-        "create_invoice failed: {:?}",
-        invoice_result.err()
+        invoice.starts_with("lnbcrt"),
+        "regtest invoice prefix, got {invoice}"
     );
 
-    // Test payment verification
-    let payment_hash = [0u8; 32];
-    let result = provider
-        .verify_payment("lnbc1pstub", &payment_hash, "test_id")
-        .await;
-    assert!(result.is_ok());
+    let parsed = blvm_lightning::invoice::InvoiceParser::parse(&invoice).expect("parse invoice");
+    let payment_hash = parsed.payment_hash();
+    let unpaid = provider
+        .verify_payment(&invoice, &payment_hash, "test_id")
+        .await
+        .expect("verify");
+    assert!(!unpaid.verified, "a newly created invoice is not a payment");
+
+    let confirmed = provider
+        .is_payment_confirmed(&payment_hash)
+        .await
+        .expect("confirm");
+    assert!(!confirmed);
+    assert!(provider.list_channels().await.expect("channels").is_empty());
+    assert_eq!(provider.get_balance().await.expect("balance"), Some(0));
+    assert!(provider.pay_invoice(&invoice).await.is_err());
+
+    let reopened = create_provider(ProviderType::LDK, &ctx)
+        .unwrap_or_else(|e| panic!("LDK reload failed: {e}"));
+    let again = reopened
+        .create_invoice(2000, "reload", 3600)
+        .await
+        .expect("invoice after reload");
+    let again_parsed =
+        blvm_lightning::invoice::InvoiceParser::parse(&again).expect("parse reloaded invoice");
+    assert_eq!(
+        parsed.invoice.recover_payee_pub_key(),
+        again_parsed.invoice.recover_payee_pub_key(),
+        "reloading the data directory keeps the LDK node id"
+    );
 }

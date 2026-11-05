@@ -26,6 +26,32 @@ pub struct LightningProcessor {
     node_api: Arc<dyn NodeAPI>,
     /// Module DB for invoice storage (list-invoices)
     invoice_db: Option<Arc<dyn blvm_node::storage::database::Database>>,
+    min_payment_sats: Option<u64>,
+    max_payment_sats: Option<u64>,
+}
+
+/// `None` when the amount is inside the optional satoshi bounds. Amount is millisatoshis.
+pub(crate) fn invoice_amount_rejection(
+    amount_msats: u64,
+    min_payment_sats: Option<u64>,
+    max_payment_sats: Option<u64>,
+) -> Option<String> {
+    let amount_sats = amount_msats / 1000;
+    if let Some(min) = min_payment_sats {
+        if amount_sats < min {
+            return Some(format!(
+                "amount {amount_sats} sats is below min_payment_sats {min}"
+            ));
+        }
+    }
+    if let Some(max) = max_payment_sats {
+        if amount_sats > max {
+            return Some(format!(
+                "amount {amount_sats} sats is above max_payment_sats {max}"
+            ));
+        }
+    }
+    None
 }
 
 /// A missing module, a reply that is not JSON, or a payment with no confirmations yields no event.
@@ -38,9 +64,10 @@ fn settled_from_payment_state(payment_id: &str, reply: Option<&[u8]>) -> Option<
     if confirmations == 0 {
         return None;
     }
-    let tx_hash = value.get("tx_hash").and_then(|item| item.as_str()).and_then(|hex_str| {
-        blvm_node::storage::hashing::hash_from_rpc_hex(hex_str).ok()
-    })?;
+    let tx_hash = value
+        .get("tx_hash")
+        .and_then(|item| item.as_str())
+        .and_then(|hex_str| blvm_node::storage::hashing::hash_from_rpc_hex(hex_str).ok())?;
     Some(EventPayload::PaymentSettled {
         payment_id: payment_id.to_string(),
         tx_hash,
@@ -71,8 +98,16 @@ impl LightningProcessor {
             provider_type
         );
 
-        // Create provider
+        // Create provider, then let it see the node. LDK anchors its chain tip here,
+        // before any invoice is registered and before the peer listener starts.
         let provider = create_provider(provider_type, ctx)?;
+        provider.attach_node(Arc::clone(&node_api)).await?;
+        let min_payment_sats = ctx
+            .get_config("lightning.min_payment_sats")
+            .and_then(|value| value.parse().ok());
+        let max_payment_sats = ctx
+            .get_config("lightning.max_payment_sats")
+            .and_then(|value| value.parse().ok());
 
         // Store provider info in module DB
         const CONFIG_TREE: &str = "config";
@@ -100,6 +135,8 @@ impl LightningProcessor {
             provider,
             node_api,
             invoice_db,
+            min_payment_sats,
+            max_payment_sats,
         })
     }
 
@@ -138,6 +175,20 @@ impl LightningProcessor {
                     }
                     EventType::PaymentFailed => {
                         debug!("Payment failed event received");
+                    }
+                    EventType::NewBlock => {
+                        if let Some((hash, height)) = event_msg.payload.as_new_block() {
+                            self.provider
+                                .on_block_connected(node_api, hash, height)
+                                .await?;
+                        }
+                    }
+                    EventType::BlockDisconnected => {
+                        if let Some((hash, height)) = event_msg.payload.as_block_disconnected() {
+                            self.provider
+                                .on_block_disconnected(node_api, hash, height)
+                                .await?;
+                        }
                     }
                     _ => {
                         // Ignore other events
@@ -348,6 +399,11 @@ impl LightningProcessor {
         description: &str,
         expiry_seconds: u64,
     ) -> Result<String, LightningError> {
+        if let Some(reason) =
+            invoice_amount_rejection(amount_msats, self.min_payment_sats, self.max_payment_sats)
+        {
+            return Err(LightningError::ProcessorError(reason));
+        }
         let invoice = self
             .provider
             .create_invoice(amount_msats, description, expiry_seconds)
@@ -399,7 +455,9 @@ impl LightningProcessor {
         self.provider.get_balance().await
     }
 
-    /// Pay a Lightning invoice (outgoing payment). Emits PaymentRouteFound, PaymentRouteFailed, PaymentVerified, or PaymentFailed.
+    /// Pay a Lightning invoice. `Ok` means the provider queued the send.
+    /// `PaymentRouteFound` arrives later, from the path that succeeded.
+    /// `PaymentVerified` arrives from `PaymentSent` or `PaymentClaimed`.
     pub async fn pay_invoice(
         &self,
         invoice: &str,
@@ -411,32 +469,7 @@ impl LightningProcessor {
             .unwrap_or_else(|_| hex::encode(rand::random::<[u8; 16]>()));
 
         match self.provider.pay_invoice(invoice).await {
-            Ok(result) => {
-                let payload = EventPayload::PaymentRouteFound {
-                    payment_id: result.payment_id.clone(),
-                    route_hops: result.route_hops,
-                    route_cost_msats: result.route_cost_msats,
-                };
-                if let Err(e) = node_api
-                    .publish_event(EventType::PaymentRouteFound, payload)
-                    .await
-                {
-                    debug!("Failed to publish PaymentRouteFound: {}", e);
-                }
-                // Payment succeeded - emit PaymentVerified
-                let payload = EventPayload::PaymentVerified {
-                    payment_id: result.payment_id,
-                    amount_msats: 0, // Provider would know actual amount
-                    invoice: invoice.to_string(),
-                };
-                if let Err(e) = node_api
-                    .publish_event(EventType::PaymentVerified, payload)
-                    .await
-                {
-                    debug!("Failed to publish PaymentVerified: {}", e);
-                }
-                Ok(())
-            }
+            Ok(_result) => Ok(()),
             Err(e) => {
                 let reason = e.to_string();
                 let is_route_error = matches!(e, LightningError::RoutingError(_));
@@ -489,6 +522,46 @@ impl LightningProcessor {
     pub async fn list_channels(&self) -> Result<Vec<crate::provider::ChannelInfo>, LightningError> {
         self.provider.list_channels().await
     }
+
+    /// Deposit address for the LDK on-chain key. `None` for providers that do not hold one.
+    pub async fn deposit_address(&self) -> Result<Option<String>, LightningError> {
+        self.provider.deposit_address().await
+    }
+
+    /// Open an outbound channel. `outpoints` is `txid:vout` comma-separated.
+    pub async fn open_channel(
+        &self,
+        node_api: &dyn NodeAPI,
+        peer_pubkey: &str,
+        value_sats: u64,
+        outpoints: &str,
+    ) -> Result<String, LightningError> {
+        self.provider
+            .open_channel(node_api, peer_pubkey, value_sats, outpoints)
+            .await
+    }
+}
+
+#[cfg(test)]
+mod invoice_bound_tests {
+    use super::invoice_amount_rejection;
+    use crate::provider::LightningProvider;
+    use crate::provider::stub::StubProvider;
+
+    #[tokio::test]
+    async fn omitted_min_payment_still_creates_an_invoice() {
+        assert!(invoice_amount_rejection(1_000, None, None).is_none());
+        let invoice = StubProvider::new()
+            .create_invoice(1_000, "test", 3600)
+            .await
+            .expect("invoice");
+        assert!(invoice.starts_with("lnbc"));
+    }
+
+    #[test]
+    fn set_minimum_rejects_a_smaller_amount() {
+        assert!(invoice_amount_rejection(500, Some(1), None).is_some());
+    }
 }
 
 #[cfg(test)]
@@ -510,9 +583,7 @@ mod settled_state_tests {
     #[test]
     fn a_confirmed_payment_publishes_payment_settled() {
         let tx_hash = "ab".repeat(32);
-        let reply = format!(
-            r#"{{"confirmation_count":6,"tx_hash":"{tx_hash}"}}"#
-        );
+        let reply = format!(r#"{{"confirmation_count":6,"tx_hash":"{tx_hash}"}}"#);
         match settled_from_payment_state("pay-1", Some(reply.as_bytes())) {
             Some(EventPayload::PaymentSettled {
                 payment_id,

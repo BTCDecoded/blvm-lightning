@@ -64,8 +64,17 @@ Trait implemented by all Lightning providers.
 - Configuration: `lightning.lnbits.api_url`, `lightning.lnbits.api_key`
 
 **LDK Provider**
-- Rust-native Lightning implementation (bare minimum)
-- Configuration: `lightning.ldk.data_dir`, `lightning.ldk.network`, `lightning.ldk.node_private_key`
+- Upstream LDK 0.0.125 `ChannelManager` and `ChainMonitor` in the module process
+- `create_invoice` registers an inbound payment, adds a route hint for each usable private channel, and signs a BOLT11 invoice with the LDK node key. Received HTLCs are forwarded when LDK reports them ready, and a claimable invoice payment is claimed.
+- `verify_payment` and `is_payment_confirmed` are true only after `PaymentClaimable` or `PaymentClaimed`
+- Chain source is the node. A genesis manager with no channels is anchored at the node tip on startup. Otherwise each missing block is connected in order. Broadcasts go to the node mempool and to `ldk/broadcasts.log`.
+- `lightning.ldk.listen_port` binds inbound peers. `lightning.ldk.peers` is a comma-separated list of `pubkey@host:port`.
+- `pay_invoice` returns when LDK queues the send. It does not claim a route. `PaymentRouteFound` is published from `PaymentPathSuccessful`. `PaymentVerified` is published from `PaymentSent` or `PaymentClaimed` with the payment amount. No route is an error.
+- `deposit_address` is the P2WPKH address for the LDK seed's on-chain key. `open_channel` spends `txid:vout` coins that pay it, after the peer accepts. Those coins are stored in `ldk/funding.json`. `ChannelOpened` is published when the channel is ready.
+- Restart files under the data directory: `ldk/network_graph`, `ldk/scorer`, `ldk/payments.json`, and `ldk/funding.json`.
+- `lightning.ldk.max_inbound_sats` caps an inbound channel. Absent rejects inbound opens. Zero-confirmation channels are not accepted.
+- Configuration: `lightning.ldk.network` (`mainnet`, `testnet`, `signet`, `regtest`). `lightning.ldk.node_private_key` is an optional hex 32-byte LDK seed, not the node secret. The data directory comes from the module context.
+- Manifest capabilities: `read_blockchain`, `read_chain_state`, `read_utxo`, `read_mempool`, `send_transactions`, `subscribe_events`, `publish_events`.
 
 **Stub Provider**
 - Mock implementation for testing
@@ -81,14 +90,15 @@ Factory function to create a provider from configuration.
 - `PaymentRequestCreated` - New payment request
 - `PaymentSettled` - Payment confirmed on-chain
 - `PaymentFailed` - Payment failed
+- `NewBlock` - Advance the LDK chain tip
+- `BlockDisconnected` - Disconnect the LDK tip when it matches
 
 ### Published Events
 - `PaymentVerified` - Lightning payment verified
 - `PaymentRouteFound` - Payment route discovered
 - `PaymentRouteFailed` - Payment routing failed
 - `ChannelClosed` - Lightning channel closed
-
-(`ChannelOpened` exists on `EventType` but is **not emitted** by this module.)
+- `ChannelOpened` - LDK reported the channel ready
 
 ## Configuration
 
@@ -111,8 +121,8 @@ wallet_id = "optional_wallet_id"
 provider = "ldk"
 
 [ldk]
-network = "testnet"  # "mainnet", "testnet", "regtest"
-node_private_key = "hex_encoded_private_key"  # Optional
+network = "testnet"  # mainnet, testnet, signet, or regtest
+node_private_key = "hex_encoded_32_byte_seed"  # optional LDK seed
 ```
 
 ### Stub Provider

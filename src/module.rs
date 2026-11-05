@@ -16,7 +16,13 @@ pub struct LightningModule {
 
 #[module]
 impl LightningModule {
-    #[on_event(PaymentRequestCreated, PaymentSettled, PaymentFailed)]
+    #[on_event(
+        PaymentRequestCreated,
+        PaymentSettled,
+        PaymentFailed,
+        NewBlock,
+        BlockDisconnected
+    )]
     async fn on_payment_event(
         &self,
         event: &EventMessage,
@@ -119,7 +125,8 @@ impl LightningModule {
             let channels = processor.list_channels().await.unwrap_or_default();
             if channels.is_empty() {
                 Ok::<_, String>(
-                    "No channels. LDK provider would list channels when connected.".into(),
+                    "No channels. For the LDK provider, set lightning.ldk.listen_port and lightning.ldk.peers."
+                        .into(),
                 )
             } else {
                 let mut out = format!("Channels ({}):\n", channels.len());
@@ -143,6 +150,54 @@ impl LightningModule {
                 }
                 Ok::<_, String>(out)
             }
+        })
+    }
+
+    /// Address that pays this LDK node's on-chain deposit key.
+    #[command]
+    fn deposit_address(&self, _ctx: &InvocationContext) -> Result<String, ModuleError> {
+        let processor = Arc::clone(&self.processor);
+        run_async(async move {
+            match processor.deposit_address().await {
+                Ok(Some(address)) => Ok(format!("Deposit address:\n{address}")),
+                Ok(None) => Err(anyhow::anyhow!(
+                    "This provider has no on-chain deposit address."
+                )),
+                Err(err) => Err(anyhow::anyhow!("{err}")),
+            }
+        })
+    }
+
+    /// Open an outbound channel. The outpoints must pay the deposit address.
+    #[command]
+    fn open_channel(
+        &self,
+        ctx: &InvocationContext,
+        peer_pubkey: String,
+        value_sats: u64,
+        outpoints: String,
+    ) -> Result<String, ModuleError> {
+        let peer = peer_pubkey.trim().to_string();
+        let coins = outpoints.trim().to_string();
+        if peer.is_empty() || coins.is_empty() {
+            return Err(ModuleError::Other(
+                "Usage: open-channel <peer_pubkey> <value_sats> <txid:vout>[,txid:vout]".into(),
+            ));
+        }
+        let node_api = ctx.node_api().ok_or_else(|| {
+            ModuleError::Other("Node not connected (open-channel requires node API)".into())
+        })?;
+        let processor = Arc::clone(&self.processor);
+        run_async(async move {
+            processor
+                .open_channel(node_api.as_ref(), &peer, value_sats, &coins)
+                .await
+                .map(|id| {
+                    format!(
+                        "Channel {id} requested. The funding transaction is signed when the peer accepts."
+                    )
+                })
+                .map_err(|e| anyhow::anyhow!("{e}"))
         })
     }
 

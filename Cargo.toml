@@ -1,6 +1,6 @@
 [package]
 name = "blvm-lightning"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 authors = ["Bitcoin Commons Team"]
 description = "Lightning Network payment processor module for blvm-node"
@@ -41,6 +41,9 @@ reqwest = { version = "0.12", features = ["json"] }
 
 # Lightning invoice parsing (BOLT11); pins `bitcoin` 0.32 (requires `secp-recovery` for invoice signing).
 lightning-invoice = { version = "0.32", features = ["std"] }
+# Same bitcoin 0.32 / lightning-invoice 0.32 pair. Upstream LDK, not a vendored fork.
+lightning = "=0.0.125"
+lightning-net-tokio = "=0.0.125"
 
 # Must match `lightning-invoice` (invoice builder / `Message` hashing use this stack).
 bitcoin = { version = "0.32", features = ["std", "secp-recovery"] }
@@ -64,3 +67,14 @@ tempfile = "3.10"
 
 # Local monorepo: sibling paths override the version pins above.
 # Strip this section in CI/release (BTCDecoded/rust-ci/strip-patch-crates-io@main).
+[patch.crates-io]
+quinn-proto = { git = "https://github.com/quinn-rs/quinn", tag = "quinn-proto-0.11.15" }
+blvm-node = { path = "../blvm-node" }
+blvm-sdk = { path = "../blvm-sdk" }
+blvm-sdk-macros = { path = "../blvm-sdk/crates/blvm-sdk-macros" }
+blvm-protocol = { path = "../blvm-protocol" }
+blvm-consensus = { path = "../blvm-consensus" }
+blvm-primitives = { path = "../blvm-primitives" }
+blvm-secp256k1 = { path = "../blvm-secp256k1" }
+blvm-spec-lock = { path = "../blvm-spec-lock" }
+blvm-muhash = { path = "../blvm-muhash" }

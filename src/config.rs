@@ -1,7 +1,7 @@
 //! Lightning module configuration.
 //!
-//! Loaded from config.toml in module data dir. Node overrides via [modules.lightning] and
-//! MODULE_CONFIG_* env vars.
+//! Loaded from config.toml in module data dir. Node overrides via [modules.blvm-lightning]
+//! and MODULE_CONFIG_* env vars.
 
 use blvm_sdk_macros::config;
 use serde::{Deserialize, Serialize};
@@ -22,8 +22,19 @@ pub struct LnbitsConfig {
 pub struct LdkConfig {
     #[serde(default = "default_network")]
     pub network: String,
+    /// Hex-encoded 32-byte LDK seed. LDK derives the node key from this seed.
+    /// When unset, the module generates a seed and stores it under the data directory.
     #[serde(default)]
     pub node_private_key: Option<String>,
+    /// TCP port for inbound Lightning peers. Unset means the module does not listen.
+    #[serde(default)]
+    pub listen_port: Option<u16>,
+    /// Outbound peers, each `node_pubkey@host:port`.
+    #[serde(default)]
+    pub peers: Vec<String>,
+    /// Largest inbound channel, in satoshis. Absent rejects every inbound open.
+    #[serde(default)]
+    pub max_inbound_sats: Option<u64>,
 }
 
 fn default_network() -> String {
@@ -33,7 +44,7 @@ fn default_network() -> String {
 /// Lightning module configuration.
 ///
 /// Config file: `config.toml` in module data dir with [lightning] and [lightning.lnbits]/[lightning.ldk] sections.
-/// Node override: `[modules.lightning]` or `[modules.blvm-lightning]` in node config.
+/// Node override: `[modules.blvm-lightning]` in node config.
 #[config(name = "lightning")]
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct LightningConfig {
@@ -48,15 +59,14 @@ pub struct LightningConfig {
     #[serde(default)]
     pub ldk: LdkConfig,
 
-    /// Min payment in sats (enforced in create_invoice).
+    /// Min payment in sats. Absent means `create_invoice` has no lower bound.
     #[serde(default)]
+    #[config_env]
     pub min_payment_sats: Option<u64>,
-    /// Max payment in sats (enforced in create_invoice).
+    /// Max payment in sats. Absent means `create_invoice` has no upper bound.
     #[serde(default)]
+    #[config_env]
     pub max_payment_sats: Option<u64>,
-    /// Channel reserve in sats (LDK).
-    #[serde(default)]
-    pub channel_reserve: Option<u64>,
 }
 
 fn default_provider() -> String {
@@ -93,6 +103,24 @@ impl LightningConfig {
         }
         if let Some(ref k) = self.ldk.node_private_key {
             m.insert("lightning.ldk.node_private_key".to_string(), k.clone());
+        }
+        if let Some(port) = self.ldk.listen_port {
+            m.insert("lightning.ldk.listen_port".to_string(), port.to_string());
+        }
+        if !self.ldk.peers.is_empty() {
+            m.insert("lightning.ldk.peers".to_string(), self.ldk.peers.join(","));
+        }
+        if let Some(max) = self.ldk.max_inbound_sats {
+            m.insert(
+                "lightning.ldk.max_inbound_sats".to_string(),
+                max.to_string(),
+            );
+        }
+        if let Some(min) = self.min_payment_sats {
+            m.insert("lightning.min_payment_sats".to_string(), min.to_string());
+        }
+        if let Some(max) = self.max_payment_sats {
+            m.insert("lightning.max_payment_sats".to_string(), max.to_string());
         }
         m
     }

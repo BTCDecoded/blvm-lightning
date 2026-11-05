@@ -7,11 +7,14 @@
 
 use crate::error::LightningError;
 use async_trait::async_trait;
-use blvm_node::module::traits::ModuleContext;
+use blvm_node::module::traits::{ModuleContext, NodeAPI};
 use serde_json::Value;
 use std::str::FromStr;
+use std::sync::Arc;
 
 // Define types first, then submodules can import them
+#[cfg(test)]
+mod chain_node;
 pub mod ldk;
 pub mod lnbits;
 pub mod stub;
@@ -101,6 +104,53 @@ pub trait LightningProvider: Send + Sync {
             "Channel management not implemented for this provider".to_string(),
         ))
     }
+
+    /// Address that pays the provider's on-chain deposit key. Empty when the provider has none.
+    async fn deposit_address(&self) -> Result<Option<String>, LightningError> {
+        Ok(None)
+    }
+
+    /// Open an outbound channel funded by `outpoints` (`txid:vout`, comma-separated).
+    ///
+    /// The outpoints must pay [`Self::deposit_address`] and be SegWit.
+    async fn open_channel(
+        &self,
+        _node: &dyn NodeAPI,
+        _peer_pubkey: &str,
+        _value_sats: u64,
+        _outpoints: &str,
+    ) -> Result<String, LightningError> {
+        Err(LightningError::ProcessorError(
+            "Channel opening is not implemented for this provider".to_string(),
+        ))
+    }
+
+    /// Give the provider the node API after it has been constructed.
+    ///
+    /// The LDK provider uses this to anchor its chain tip and start its peer listener.
+    async fn attach_node(&self, _node: Arc<dyn NodeAPI>) -> Result<(), LightningError> {
+        Ok(())
+    }
+
+    /// A block was connected on the node. The hash is the node's block hash.
+    async fn on_block_connected(
+        &self,
+        _node: &dyn NodeAPI,
+        _hash: &[u8; 32],
+        _height: u64,
+    ) -> Result<(), LightningError> {
+        Ok(())
+    }
+
+    /// A block was disconnected on the node.
+    async fn on_block_disconnected(
+        &self,
+        _node: &dyn NodeAPI,
+        _hash: &[u8; 32],
+        _height: u64,
+    ) -> Result<(), LightningError> {
+        Ok(())
+    }
 }
 
 /// Result of pay_invoice attempt
@@ -141,10 +191,32 @@ pub fn create_provider(
                 .and_then(|s| hex::decode(s).ok())
                 .map(|v| v.into_iter().collect());
 
+            let listen_port = ctx
+                .get_config("lightning.ldk.listen_port")
+                .and_then(|value| value.parse().ok())
+                .filter(|port: &u16| *port != 0);
+            let peers = ctx
+                .get_config("lightning.ldk.peers")
+                .map(|value| {
+                    value
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|peer| !peer.is_empty())
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let max_inbound_sats = ctx
+                .get_config("lightning.ldk.max_inbound_sats")
+                .and_then(|value| value.parse().ok());
+
             let config = ldk::LDKConfig {
                 data_dir: std::path::PathBuf::from(data_dir),
                 network: network.to_string(),
                 node_private_key,
+                listen_port,
+                peers,
+                max_inbound_sats,
             };
 
             Ok(Box::new(ldk::LDKProvider::new(config)?))

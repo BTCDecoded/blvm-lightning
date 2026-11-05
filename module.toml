@@ -1,12 +1,17 @@
 name = "blvm-lightning"
-version = "0.1.4"
+version = "0.1.5"
 description = "Lightning Network payment processor module for blvm-node"
 author = "Bitcoin Commons Team"
 entry_point = "blvm-lightning"
 
 capabilities = [
     "read_blockchain",
+    "read_chain_state",
+    "read_utxo",
+    "read_mempool",
+    "send_transactions",
     "subscribe_events",
+    "publish_events",
 ]
 
 # CI fills url/sha256 on release — do not treat empty entries as real installs.
