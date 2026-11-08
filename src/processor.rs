@@ -68,11 +68,14 @@ fn settled_from_payment_state(payment_id: &str, reply: Option<&[u8]>) -> Option<
         .get("tx_hash")
         .and_then(|item| item.as_str())
         .and_then(|hex_str| blvm_node::storage::hashing::hash_from_rpc_hex(hex_str).ok())?;
-    Some(EventPayload::PaymentSettled {
-        payment_id: payment_id.to_string(),
-        tx_hash,
-        confirmations: confirmations as u32,
-    })
+    Some(EventPayload::module_event_json(
+        "PaymentSettled",
+        &serde_json::json!({
+            "payment_id": payment_id,
+            "tx_hash": hex::encode(tx_hash),
+            "confirmations": confirmations as u32,
+        }),
+    ))
 }
 
 impl LightningProcessor {
@@ -149,32 +152,31 @@ impl LightningProcessor {
         match event {
             ModuleMessage::Event(event_msg) => {
                 match event_msg.event_type {
-                    EventType::PaymentRequestCreated => {
-                        if let EventPayload::PaymentRequestCreated {
-                            payment_id,
-                            invoice,
-                            ..
-                        } = &event_msg.payload
-                        {
-                            debug!("Processing payment request: {}", payment_id);
-                            if let Some(invoice_str) = invoice {
-                                if let Some(ref db) = self.invoice_db {
-                                    crate::invoice_store::store_invoice(
-                                        db,
-                                        payment_id,
-                                        invoice_str,
-                                    );
+                    EventType::ModuleEvent => {
+                        if let EventPayload::ModuleEvent { name, data, .. } = &event_msg.payload {
+                            if name == "PaymentRequestCreated" {
+                                let value: serde_json::Value =
+                                    serde_json::from_slice(data).unwrap_or(serde_json::Value::Null);
+                                let payment_id = value
+                                    .get("payment_id")
+                                    .and_then(|item| item.as_str())
+                                    .unwrap_or("");
+                                if let Some(invoice_str) =
+                                    value.get("invoice").and_then(|item| item.as_str())
+                                {
+                                    debug!("Processing payment request: {}", payment_id);
+                                    if let Some(ref db) = self.invoice_db {
+                                        crate::invoice_store::store_invoice(
+                                            db,
+                                            payment_id,
+                                            invoice_str,
+                                        );
+                                    }
+                                    self.process_payment(invoice_str, payment_id, node_api)
+                                        .await?;
                                 }
-                                self.process_payment(invoice_str, payment_id, node_api)
-                                    .await?;
                             }
                         }
-                    }
-                    EventType::PaymentSettled => {
-                        debug!("Payment settled event received");
-                    }
-                    EventType::PaymentFailed => {
-                        debug!("Payment failed event received");
                     }
                     EventType::NewBlock => {
                         if let Some((hash, height)) = event_msg.payload.as_new_block() {
@@ -244,12 +246,15 @@ impl LightningProcessor {
         // Check if invoice is expired
         if invoice_data.is_expired() {
             warn!("Invoice expired for payment_id: {}", payment_id);
-            let payload = EventPayload::PaymentFailed {
-                payment_id: payment_id.to_string(),
-                reason: "Invoice expired".to_string(),
-            };
+            let payload = EventPayload::module_event_json(
+                "PaymentFailed",
+                &serde_json::json!({
+                    "payment_id": payment_id,
+                    "reason": "Invoice expired",
+                }),
+            );
             if let Err(e) = node_api
-                .publish_event(EventType::PaymentFailed, payload)
+                .publish_event(EventType::ModuleEvent, payload)
                 .await
             {
                 debug!("Failed to publish PaymentFailed: {}", e);
@@ -269,12 +274,15 @@ impl LightningProcessor {
             Ok(r) => r,
             Err(e) => {
                 let reason = e.to_string();
-                let payload = EventPayload::PaymentFailed {
-                    payment_id: payment_id.to_string(),
-                    reason: reason.clone(),
-                };
+                let payload = EventPayload::module_event_json(
+                    "PaymentFailed",
+                    &serde_json::json!({
+                        "payment_id": payment_id,
+                        "reason": reason,
+                    }),
+                );
                 if let Err(pub_e) = node_api
-                    .publish_event(EventType::PaymentFailed, payload)
+                    .publish_event(EventType::ModuleEvent, payload)
                     .await
                 {
                     debug!("Failed to publish PaymentFailed: {}", pub_e);
@@ -291,13 +299,16 @@ impl LightningProcessor {
                 verification_result.amount_msats
             );
 
-            let payload = EventPayload::PaymentVerified {
-                payment_id: payment_id.to_string(),
-                amount_msats: verification_result.amount_msats.unwrap_or(0),
-                invoice: invoice.to_string(),
-            };
+            let payload = EventPayload::module_event_json(
+                "PaymentVerified",
+                &serde_json::json!({
+                    "payment_id": payment_id,
+                    "amount_msats": verification_result.amount_msats.unwrap_or(0),
+                    "invoice": invoice,
+                }),
+            );
             if let Err(e) = node_api
-                .publish_event(EventType::PaymentVerified, payload)
+                .publish_event(EventType::ModuleEvent, payload)
                 .await
             {
                 debug!("Failed to publish PaymentVerified: {}", e);
@@ -311,7 +322,7 @@ impl LightningProcessor {
                 .ok();
             if let Some(payload) = settled_from_payment_state(payment_id, reply.as_deref()) {
                 if let Err(e) = node_api
-                    .publish_event(EventType::PaymentSettled, payload)
+                    .publish_event(EventType::ModuleEvent, payload)
                     .await
                 {
                     debug!("Failed to publish PaymentSettled: {}", e);
@@ -323,12 +334,15 @@ impl LightningProcessor {
                 payment_id
             );
             let reason = "Verification failed".to_string();
-            let payload = EventPayload::PaymentFailed {
-                payment_id: payment_id.to_string(),
-                reason: reason.clone(),
-            };
+            let payload = EventPayload::module_event_json(
+                "PaymentFailed",
+                &serde_json::json!({
+                    "payment_id": payment_id,
+                    "reason": reason,
+                }),
+            );
             if let Err(e) = node_api
-                .publish_event(EventType::PaymentFailed, payload)
+                .publish_event(EventType::ModuleEvent, payload)
                 .await
             {
                 debug!("Failed to publish PaymentFailed: {}", e);
@@ -413,14 +427,17 @@ impl LightningProcessor {
             .map(|d| d.payment_hash_hex())
             .unwrap_or_else(|_| hex::encode(rand::random::<[u8; 16]>()));
         let amount_sats = amount_msats / 1000;
-        let payload = EventPayload::PaymentRequestCreated {
-            payment_id: payment_id.clone(),
-            amount_sats,
-            invoice: Some(invoice.clone()),
-        };
+        let payload = EventPayload::module_event_json(
+            "PaymentRequestCreated",
+            &serde_json::json!({
+                "payment_id": payment_id,
+                "amount_sats": amount_sats,
+                "invoice": invoice,
+            }),
+        );
         if let Err(e) = self
             .node_api
-            .publish_event(EventType::PaymentRequestCreated, payload)
+            .publish_event(EventType::ModuleEvent, payload)
             .await
         {
             debug!("Failed to publish PaymentRequestCreated: {}", e);
@@ -473,21 +490,30 @@ impl LightningProcessor {
             Err(e) => {
                 let reason = e.to_string();
                 let is_route_error = matches!(e, LightningError::RoutingError(_));
-                let payload = EventPayload::PaymentRouteFailed {
-                    payment_id: payment_id.clone(),
-                    reason: reason.clone(),
-                };
+                let payload = EventPayload::module_event_json(
+                    "PaymentRouteFailed",
+                    &serde_json::json!({
+                        "payment_id": payment_id,
+                        "reason": reason.clone(),
+                    }),
+                );
                 if is_route_error {
                     if let Err(pub_e) = node_api
-                        .publish_event(EventType::PaymentRouteFailed, payload)
+                        .publish_event(EventType::ModuleEvent, payload)
                         .await
                     {
                         debug!("Failed to publish PaymentRouteFailed: {}", pub_e);
                     }
                 } else {
-                    let payload = EventPayload::PaymentFailed { payment_id, reason };
+                    let payload = EventPayload::module_event_json(
+                        "PaymentFailed",
+                        &serde_json::json!({
+                            "payment_id": payment_id,
+                            "reason": reason,
+                        }),
+                    );
                     if let Err(pub_e) = node_api
-                        .publish_event(EventType::PaymentFailed, payload)
+                        .publish_event(EventType::ModuleEvent, payload)
                         .await
                     {
                         debug!("Failed to publish PaymentFailed: {}", pub_e);
@@ -505,12 +531,15 @@ impl LightningProcessor {
         node_api: &dyn NodeAPI,
     ) -> Result<(), LightningError> {
         self.provider.close_channel(channel_id).await?;
-        let payload = EventPayload::ChannelClosed {
-            channel_id: channel_id.to_string(),
-            reason: "user_requested".to_string(),
-        };
+        let payload = EventPayload::module_event_json(
+            "ChannelClosed",
+            &serde_json::json!({
+                "channel_id": channel_id,
+                "reason": "user_requested",
+            }),
+        );
         if let Err(e) = node_api
-            .publish_event(EventType::ChannelClosed, payload)
+            .publish_event(EventType::ModuleEvent, payload)
             .await
         {
             debug!("Failed to publish ChannelClosed: {}", e);
@@ -585,14 +614,12 @@ mod settled_state_tests {
         let tx_hash = "ab".repeat(32);
         let reply = format!(r#"{{"confirmation_count":6,"tx_hash":"{tx_hash}"}}"#);
         match settled_from_payment_state("pay-1", Some(reply.as_bytes())) {
-            Some(EventPayload::PaymentSettled {
-                payment_id,
-                confirmations,
-                tx_hash: hash,
-            }) => {
-                assert_eq!(payment_id, "pay-1");
-                assert_eq!(confirmations, 6);
-                assert_eq!(hash, [0xab; 32]);
+            Some(EventPayload::ModuleEvent { name, data, .. }) => {
+                assert_eq!(name, "PaymentSettled");
+                let value: serde_json::Value = serde_json::from_slice(&data).unwrap();
+                assert_eq!(value["payment_id"], "pay-1");
+                assert_eq!(value["confirmations"], 6);
+                assert_eq!(value["tx_hash"], tx_hash);
             }
             other => panic!("expected PaymentSettled, got {other:?}"),
         }

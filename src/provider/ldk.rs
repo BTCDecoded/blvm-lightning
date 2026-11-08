@@ -1196,22 +1196,28 @@ impl LDKProvider {
             let published = match notice {
                 NodeNotice::Verified { id, amount_msats } => {
                     node.publish_event(
-                        EventType::PaymentVerified,
-                        EventPayload::PaymentVerified {
-                            payment_id: id,
-                            amount_msats,
-                            invoice: String::new(),
-                        },
+                        EventType::ModuleEvent,
+                        EventPayload::module_event_json(
+                            "PaymentVerified",
+                            &serde_json::json!({
+                                "payment_id": id,
+                                "amount_msats": amount_msats,
+                                "invoice": "",
+                            }),
+                        ),
                     )
                     .await
                 }
                 NodeNotice::Failed { id, reason } => {
                     node.publish_event(
-                        EventType::PaymentRouteFailed,
-                        EventPayload::PaymentRouteFailed {
-                            payment_id: id,
-                            reason,
-                        },
+                        EventType::ModuleEvent,
+                        EventPayload::module_event_json(
+                            "PaymentRouteFailed",
+                            &serde_json::json!({
+                                "payment_id": id,
+                                "reason": reason,
+                            }),
+                        ),
                     )
                     .await
                 }
@@ -1221,19 +1227,28 @@ impl LDKProvider {
                     cost_msats,
                 } => {
                     node.publish_event(
-                        EventType::PaymentRouteFound,
-                        EventPayload::PaymentRouteFound {
-                            payment_id: id,
-                            route_hops: hops,
-                            route_cost_msats: cost_msats,
-                        },
+                        EventType::ModuleEvent,
+                        EventPayload::module_event_json(
+                            "PaymentRouteFound",
+                            &serde_json::json!({
+                                "payment_id": id,
+                                "route_hops": hops,
+                                "route_cost_msats": cost_msats,
+                            }),
+                        ),
                     )
                     .await
                 }
                 NodeNotice::ChannelClosed { channel_id, reason } => {
                     node.publish_event(
-                        EventType::ChannelClosed,
-                        EventPayload::ChannelClosed { channel_id, reason },
+                        EventType::ModuleEvent,
+                        EventPayload::module_event_json(
+                            "ChannelClosed",
+                            &serde_json::json!({
+                                "channel_id": channel_id,
+                                "reason": reason,
+                            }),
+                        ),
                     )
                     .await
                 }
@@ -1243,12 +1258,15 @@ impl LDKProvider {
                     capacity_sats,
                 } => {
                     node.publish_event(
-                        EventType::ChannelOpened,
-                        EventPayload::ChannelOpened {
-                            channel_id,
-                            peer_pubkey,
-                            capacity_sats,
-                        },
+                        EventType::ModuleEvent,
+                        EventPayload::module_event_json(
+                            "ChannelOpened",
+                            &serde_json::json!({
+                                "channel_id": channel_id,
+                                "peer_pubkey": peer_pubkey,
+                                "capacity_sats": capacity_sats,
+                            }),
+                        ),
                     )
                     .await
                 }
@@ -1794,22 +1812,28 @@ async fn publish_notices_detached(node: &dyn NodeAPI, notices: Vec<NodeNotice>) 
         let published = match notice {
             NodeNotice::Verified { id, amount_msats } => {
                 node.publish_event(
-                    EventType::PaymentVerified,
-                    EventPayload::PaymentVerified {
-                        payment_id: id,
-                        amount_msats,
-                        invoice: String::new(),
-                    },
+                    EventType::ModuleEvent,
+                    EventPayload::module_event_json(
+                        "PaymentVerified",
+                        &serde_json::json!({
+                            "payment_id": id,
+                            "amount_msats": amount_msats,
+                            "invoice": "",
+                        }),
+                    ),
                 )
                 .await
             }
             NodeNotice::Failed { id, reason } => {
                 node.publish_event(
-                    EventType::PaymentRouteFailed,
-                    EventPayload::PaymentRouteFailed {
-                        payment_id: id,
-                        reason,
-                    },
+                    EventType::ModuleEvent,
+                    EventPayload::module_event_json(
+                        "PaymentRouteFailed",
+                        &serde_json::json!({
+                            "payment_id": id,
+                            "reason": reason,
+                        }),
+                    ),
                 )
                 .await
             }
@@ -1819,19 +1843,28 @@ async fn publish_notices_detached(node: &dyn NodeAPI, notices: Vec<NodeNotice>) 
                 cost_msats,
             } => {
                 node.publish_event(
-                    EventType::PaymentRouteFound,
-                    EventPayload::PaymentRouteFound {
-                        payment_id: id,
-                        route_hops: hops,
-                        route_cost_msats: cost_msats,
-                    },
+                    EventType::ModuleEvent,
+                    EventPayload::module_event_json(
+                        "PaymentRouteFound",
+                        &serde_json::json!({
+                            "payment_id": id,
+                            "route_hops": hops,
+                            "route_cost_msats": cost_msats,
+                        }),
+                    ),
                 )
                 .await
             }
             NodeNotice::ChannelClosed { channel_id, reason } => {
                 node.publish_event(
-                    EventType::ChannelClosed,
-                    EventPayload::ChannelClosed { channel_id, reason },
+                    EventType::ModuleEvent,
+                    EventPayload::module_event_json(
+                        "ChannelClosed",
+                        &serde_json::json!({
+                            "channel_id": channel_id,
+                            "reason": reason,
+                        }),
+                    ),
                 )
                 .await
             }
@@ -1841,12 +1874,15 @@ async fn publish_notices_detached(node: &dyn NodeAPI, notices: Vec<NodeNotice>) 
                 capacity_sats,
             } => {
                 node.publish_event(
-                    EventType::ChannelOpened,
-                    EventPayload::ChannelOpened {
-                        channel_id,
-                        peer_pubkey,
-                        capacity_sats,
-                    },
+                    EventType::ModuleEvent,
+                    EventPayload::module_event_json(
+                        "ChannelOpened",
+                        &serde_json::json!({
+                            "channel_id": channel_id,
+                            "peer_pubkey": peer_pubkey,
+                            "capacity_sats": capacity_sats,
+                        }),
+                    ),
                 )
                 .await
             }

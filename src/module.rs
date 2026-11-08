@@ -16,13 +16,7 @@ pub struct LightningModule {
 
 #[module]
 impl LightningModule {
-    #[on_event(
-        PaymentRequestCreated,
-        PaymentSettled,
-        PaymentFailed,
-        NewBlock,
-        BlockDisconnected
-    )]
+    #[on_event(ModuleEvent, NewBlock, BlockDisconnected)]
     async fn on_payment_event(
         &self,
         event: &EventMessage,
