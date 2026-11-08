@@ -85,7 +85,7 @@ impl LightningModule {
                 .create_invoice(amount_msats, &desc, expiry)
                 .await
                 .map(|inv| format!("Invoice:\n{inv}"))
-                .map_err(|e| anyhow::anyhow!("Failed to create invoice: {}", e))
+                .map_err(|e| anyhow::anyhow!("Failed to create invoice: {e}"))
         })
     }
 
@@ -107,7 +107,7 @@ impl LightningModule {
                 .map(|_| {
                     "Payment initiated. Check events for PaymentVerified/PaymentFailed.".into()
                 })
-                .map_err(|e| anyhow::anyhow!("{}", e))
+                .map_err(|e| anyhow::anyhow!("{e}"))
         })
     }
 
@@ -217,7 +217,7 @@ impl LightningModule {
                 .close_channel(cid, node_api.as_ref())
                 .await
                 .map(|_| format!("Channel {cid} closed."))
-                .map_err(|e| anyhow::anyhow!("{}", e))
+                .map_err(|e| anyhow::anyhow!("{e}"))
         })
     }
 }
