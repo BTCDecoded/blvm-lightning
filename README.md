@@ -56,7 +56,7 @@ When the module starts, a manager that is still at genesis and has no channels i
 
 Transactions the manager asks to broadcast are submitted to the node mempool and appended to `<data_dir>/ldk/broadcasts.log`. If the node does not accept a transaction, it stays queued.
 
-`listen_port` binds `0.0.0.0` for inbound peers. `peers` entries are `node_pubkey@host:port`. `max_inbound_sats` is the largest inbound channel. When it is unset, inbound opens are rejected. `pay_invoice` succeeds when LDK queues the send. `PaymentRouteFound` is published from the path LDK used. `PaymentVerified` follows `PaymentSent` or `PaymentClaimed`, with the invoice amount. No route is an error.
+`listen_port` binds `0.0.0.0` for inbound peers. `peers` entries are `node_pubkey@host:port`. `max_inbound_sats` is the largest inbound channel. When it is unset, inbound opens are rejected. `pay_invoice` succeeds when LDK queues the send. That queue is not a settled payment. Mainnet channel funds are out of scope until a restart and a reorg deeper than the LDK tip are in the test record. `PaymentRouteFound` is published from the path LDK used. `PaymentVerified` follows `PaymentSent` or `PaymentClaimed`, with the invoice amount. No route is an error.
 
 The provider stores `ldk/channel_manager`, `ldk/network_graph`, `ldk/scorer`, `ldk/payments.json`, and `ldk/funding.json`.
 
