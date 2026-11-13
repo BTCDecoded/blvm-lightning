@@ -2131,11 +2131,7 @@ fn stored_payment_was_inbound() -> bool {
     true
 }
 
-type ConfirmedPayments = (
-    HashSet<[u8; 32]>,
-    HashMap<[u8; 32], u64>,
-    HashSet<[u8; 32]>,
-);
+type ConfirmedPayments = (HashSet<[u8; 32]>, HashMap<[u8; 32], u64>, HashSet<[u8; 32]>);
 
 fn load_payments(ldk_dir: &Path) -> Result<ConfirmedPayments, LightningError> {
     let path = ldk_dir.join("payments.json");
