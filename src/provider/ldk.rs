@@ -179,6 +179,8 @@ pub struct LDKProvider {
     ldk_dir: PathBuf,
     scorer: Arc<RwLock<Score>>,
     confirmed: Arc<RwLock<HashSet<[u8; 32]>>>,
+    /// Payments this node received. Outbound sends stay out of this set.
+    inbound: Arc<RwLock<HashSet<[u8; 32]>>>,
     /// Invoice amounts recorded when a payment is sent or claimed.
     amounts: Arc<Mutex<HashMap<[u8; 32], u64>>>,
     /// Fee from `PaymentSent`, used when the path event follows.
@@ -273,7 +275,7 @@ impl LDKProvider {
         let node_id = manager.get_our_node_id();
         info!(%network, node_id = %node_id, dir = %ldk_dir.display(), "LDK channel manager ready");
         let funding = load_funding(&ldk_dir)?;
-        let (confirmed, amounts) = load_payments(&ldk_dir)?;
+        let (confirmed, amounts, inbound) = load_payments(&ldk_dir)?;
 
         let provider = Self {
             network,
@@ -288,6 +290,7 @@ impl LDKProvider {
             chain_monitor,
             ldk_dir,
             confirmed: Arc::new(RwLock::new(confirmed)),
+            inbound: Arc::new(RwLock::new(inbound)),
             amounts: Arc::new(Mutex::new(amounts)),
             fees: Arc::new(Mutex::new(HashMap::new())),
             chain_lock: tokio::sync::Mutex::new(()),
@@ -313,6 +316,7 @@ impl LDKProvider {
         drain_manager(
             self.manager().as_ref(),
             &self.confirmed,
+            &self.inbound,
             self.keys.as_ref(),
             self.fee.as_ref(),
             self.broadcaster.as_ref(),
@@ -375,11 +379,24 @@ impl LightningProvider for LDKProvider {
         if parsed.payment_hash().to_byte_array() != *payment_hash {
             return Ok(unverified(self, payment_hash, "payment_hash_mismatch"));
         }
+        if parsed.recover_payee_pub_key() != self.manager().get_our_node_id() {
+            return Ok(unverified(self, payment_hash, "payee_is_not_this_node"));
+        }
 
-        let confirmed = self.is_confirmed(payment_hash);
+        let inbound = self
+            .inbound
+            .read()
+            .map(|set| set.contains(payment_hash))
+            .unwrap_or(false);
+        let stored = self
+            .amounts
+            .lock()
+            .ok()
+            .and_then(|map| map.get(payment_hash).copied());
+        let amount_msats = accepted_amount(stored, parsed.amount_milli_satoshis());
         Ok(PaymentVerificationResult {
-            verified: confirmed,
-            amount_msats: parsed.amount_milli_satoshis(),
+            verified: inbound && amount_msats.is_some(),
+            amount_msats: if inbound { amount_msats } else { None },
             timestamp: None,
             metadata: serde_json::json!({
                 "provider": "ldk",
@@ -1358,6 +1375,7 @@ impl LDKProvider {
         let funding = Arc::clone(&self.funding);
         let ldk_dir = self.ldk_dir.clone();
         let confirmed = Arc::clone(&self.confirmed);
+        let inbound = Arc::clone(&self.inbound);
         let amounts = Arc::clone(&self.amounts);
         let fees = Arc::clone(&self.fees);
         let graph = Arc::clone(&self.graph);
@@ -1377,6 +1395,7 @@ impl LDKProvider {
                 let notices = drain_manager(
                     &manager_slot,
                     &confirmed,
+                    &inbound,
                     keys.as_ref(),
                     fee.as_ref(),
                     broadcaster.as_ref(),
@@ -1586,6 +1605,7 @@ fn build_funding_transaction(
 fn drain_manager(
     manager: &Manager,
     confirmed: &RwLock<HashSet<[u8; 32]>>,
+    inbound: &RwLock<HashSet<[u8; 32]>>,
     keys: &KeysManager,
     fee: &NodeFeeEstimator,
     broadcaster: &QueuedBroadcaster,
@@ -1612,7 +1632,15 @@ fn drain_manager(
                     amount_msat,
                     ..
                 } => {
-                    remember_payment(ldk_dir, confirmed, amounts, payment_hash.0, *amount_msat);
+                    remember_payment(
+                        ldk_dir,
+                        confirmed,
+                        inbound,
+                        amounts,
+                        payment_hash.0,
+                        *amount_msat,
+                        true,
+                    );
                 }
                 Event::PaymentSent { payment_hash, .. } => {
                     let amount = amounts
@@ -1621,7 +1649,15 @@ fn drain_manager(
                         .get(&payment_hash.0)
                         .copied()
                         .unwrap_or(0);
-                    remember_payment(ldk_dir, confirmed, amounts, payment_hash.0, amount);
+                    remember_payment(
+                        ldk_dir,
+                        confirmed,
+                        inbound,
+                        amounts,
+                        payment_hash.0,
+                        amount,
+                        false,
+                    );
                 }
                 _ => {}
             }
@@ -1649,14 +1685,30 @@ fn drain_manager(
                     if let Some(preimage) = preimage_from_purpose(&purpose) {
                         manager.claim_funds(preimage);
                     }
-                    remember_payment(ldk_dir, confirmed, amounts, payment_hash.0, amount_msat);
+                    remember_payment(
+                        ldk_dir,
+                        confirmed,
+                        inbound,
+                        amounts,
+                        payment_hash.0,
+                        amount_msat,
+                        true,
+                    );
                 }
                 Event::PaymentClaimed {
                     payment_hash,
                     amount_msat,
                     ..
                 } => {
-                    remember_payment(ldk_dir, confirmed, amounts, payment_hash.0, amount_msat);
+                    remember_payment(
+                        ldk_dir,
+                        confirmed,
+                        inbound,
+                        amounts,
+                        payment_hash.0,
+                        amount_msat,
+                        true,
+                    );
                     notices.push(NodeNotice::Verified {
                         id: hex::encode(payment_hash.0),
                         amount_msats: amount_msat,
@@ -1676,7 +1728,15 @@ fn drain_manager(
                     fees.lock()
                         .expect("LDK payment fees")
                         .insert(payment_hash.0, fee_paid_msat.unwrap_or(0));
-                    remember_payment(ldk_dir, confirmed, amounts, payment_hash.0, amount);
+                    remember_payment(
+                        ldk_dir,
+                        confirmed,
+                        inbound,
+                        amounts,
+                        payment_hash.0,
+                        amount,
+                        false,
+                    );
                     notices.push(NodeNotice::Verified {
                         id: hex::encode(payment_hash.0),
                         amount_msats: amount,
@@ -2062,16 +2122,23 @@ fn write_ldk_file(
 struct StoredPayment {
     hash: String,
     amount_msat: u64,
+    /// Missing on older files. Those records stay inbound.
+    #[serde(default = "stored_payment_was_inbound")]
+    inbound: bool,
 }
 
-type ConfirmedPayments = (HashSet<[u8; 32]>, HashMap<[u8; 32], u64>);
+fn stored_payment_was_inbound() -> bool {
+    true
+}
+
+type ConfirmedPayments = (HashSet<[u8; 32]>, HashMap<[u8; 32], u64>, HashSet<[u8; 32]>);
 
 fn load_payments(ldk_dir: &Path) -> Result<ConfirmedPayments, LightningError> {
     let path = ldk_dir.join("payments.json");
     let bytes = match fs::read(&path) {
         Ok(bytes) => bytes,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return Ok((HashSet::new(), HashMap::new()));
+            return Ok((HashSet::new(), HashMap::new(), HashSet::new()));
         }
         Err(err) => return Err(io_err(err)),
     };
@@ -2080,6 +2147,7 @@ fn load_payments(ldk_dir: &Path) -> Result<ConfirmedPayments, LightningError> {
     })?;
     let mut confirmed = HashSet::new();
     let mut amounts = HashMap::new();
+    let mut inbound = HashSet::new();
     for row in stored {
         let bytes = hex::decode(&row.hash)
             .map_err(|err| LightningError::ProcessorError(format!("LDK payment hash: {err}")))?;
@@ -2088,20 +2156,25 @@ fn load_payments(ldk_dir: &Path) -> Result<ConfirmedPayments, LightningError> {
         })?;
         confirmed.insert(hash);
         amounts.insert(hash, row.amount_msat);
+        if row.inbound {
+            inbound.insert(hash);
+        }
     }
-    Ok((confirmed, amounts))
+    Ok((confirmed, amounts, inbound))
 }
 
 fn save_payments(
     ldk_dir: &Path,
     confirmed: &HashSet<[u8; 32]>,
     amounts: &HashMap<[u8; 32], u64>,
+    inbound: &HashSet<[u8; 32]>,
 ) -> Result<(), LightningError> {
     let stored: Vec<StoredPayment> = confirmed
         .iter()
         .map(|hash| StoredPayment {
             hash: hex::encode(hash),
             amount_msat: amounts.get(hash).copied().unwrap_or(0),
+            inbound: inbound.contains(hash),
         })
         .collect();
     let bytes = serde_json::to_vec(&stored).map_err(|err| {
@@ -2119,20 +2192,37 @@ fn save_payments(
 fn remember_payment(
     ldk_dir: &Path,
     confirmed: &RwLock<HashSet<[u8; 32]>>,
+    inbound: &RwLock<HashSet<[u8; 32]>>,
     amounts: &Mutex<HashMap<[u8; 32], u64>>,
     hash: [u8; 32],
     amount_msat: u64,
+    received: bool,
 ) {
     if let Ok(mut set) = confirmed.write() {
         set.insert(hash);
+    }
+    if received {
+        if let Ok(mut set) = inbound.write() {
+            set.insert(hash);
+        }
     }
     if let Ok(mut map) = amounts.lock() {
         map.insert(hash, amount_msat);
     }
     let set = confirmed.read().expect("LDK payments").clone();
+    let received_set = inbound.read().expect("LDK inbound payments").clone();
     let map = amounts.lock().expect("LDK payment amounts").clone();
-    if let Err(err) = save_payments(ldk_dir, &set, &map) {
+    if let Err(err) = save_payments(ldk_dir, &set, &map, &received_set) {
         error!(%err, "failed to persist LDK payments");
+    }
+}
+
+/// The amount a verification may report. A presented invoice cannot raise it.
+pub(crate) fn accepted_amount(stored: Option<u64>, presented: Option<u64>) -> Option<u64> {
+    match (stored, presented) {
+        (Some(got), Some(asked)) if got == asked => Some(got),
+        (Some(got), None) => Some(got),
+        _ => None,
     }
 }
 
@@ -2405,6 +2495,14 @@ mod chain_tests {
     }
 
     #[test]
+    fn presented_invoice_cannot_raise_the_received_amount() {
+        assert_eq!(accepted_amount(Some(10), Some(10)), Some(10));
+        assert_eq!(accepted_amount(Some(10), Some(11)), None);
+        assert_eq!(accepted_amount(Some(10), None), Some(10));
+        assert_eq!(accepted_amount(None, Some(10)), None);
+    }
+
+    #[test]
     fn inbound_channels_are_manual_and_a_payment_survives_reopen() {
         assert!(channel_config().manually_accept_inbound_channels);
         let (dir, provider) = open();
@@ -2412,9 +2510,11 @@ mod chain_tests {
         remember_payment(
             &provider.ldk_dir,
             &provider.confirmed,
+            &provider.inbound,
             &provider.amounts,
             hash,
             42,
+            true,
         );
         drop(provider);
         let reopened = LDKProvider::new(LDKConfig {
@@ -2568,6 +2668,18 @@ mod chain_tests {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
         assert!(sender_done, "opener did not record the sent payment");
+        let received = receiver
+            .verify_payment(&invoice, &payment_hash, "customer")
+            .await
+            .expect("verify");
+        assert!(received.verified);
+        assert_eq!(received.amount_msats, Some(10_000));
+        let sent = opener
+            .verify_payment(&invoice, &payment_hash, "customer")
+            .await
+            .expect("verify outbound");
+        assert!(!sent.verified);
+        assert!(sent.amount_msats.is_none());
         let channel_id = opener
             .list_channels()
             .await
