@@ -48,7 +48,8 @@ fn default_network() -> String {
 #[config(name = "lightning")]
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct LightningConfig {
-    /// Provider type: "lnbits", "ldk", or "stub"
+    /// Provider type: "lnbits", "ldk", or "stub".
+    /// An omitted key is LNBits. The stub does not report payments.
     #[serde(default = "default_provider")]
     #[config_env]
     pub provider: String,
@@ -70,7 +71,7 @@ pub struct LightningConfig {
 }
 
 fn default_provider() -> String {
-    "stub".to_string()
+    "lnbits".to_string()
 }
 
 blvm_sdk::impl_module_config!(LightningConfig);
@@ -123,5 +124,19 @@ impl LightningConfig {
             m.insert("lightning.max_payment_sats".to_string(), max.to_string());
         }
         m
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LightningConfig;
+
+    #[test]
+    fn an_omitted_provider_is_lnbits() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "min_payment_sats = 1\n").expect("write config");
+        let config = LightningConfig::load(&path).expect("load");
+        assert_eq!(config.provider, "lnbits");
     }
 }

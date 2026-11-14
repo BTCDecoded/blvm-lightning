@@ -23,17 +23,16 @@ async fn test_stub_provider() {
     let invoice = provider.create_invoice(1000, "test", 3600).await.unwrap();
     assert!(invoice.starts_with("lnbc"));
 
-    // Test payment verification (stub always succeeds)
     let payment_hash = [0u8; 32];
     let result = provider
         .verify_payment(&invoice, &payment_hash, "test_id")
         .await
         .unwrap();
-    assert!(result.verified);
+    assert!(!result.verified);
+    assert!(result.amount_msats.is_none());
 
-    // Test payment confirmation
     let confirmed = provider.is_payment_confirmed(&payment_hash).await.unwrap();
-    assert!(confirmed);
+    assert!(!confirmed);
 }
 
 #[tokio::test]

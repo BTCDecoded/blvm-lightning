@@ -1,6 +1,7 @@
-//! Stub provider implementation
+//! Stub provider.
 //!
-//! For testing and development. Always succeeds verification.
+//! It can mint a placeholder invoice string. It has no payment record, so
+//! verification and confirmation stay false.
 
 use crate::error::LightningError;
 use crate::provider::{LightningProvider, PaymentVerificationResult, ProviderType};
@@ -31,24 +32,15 @@ impl LightningProvider for StubProvider {
         _payment_hash: &[u8; 32],
         payment_id: &str,
     ) -> Result<PaymentVerificationResult, LightningError> {
-        debug!(
-            "Stub provider: verifying payment (always succeeds): payment_id={}",
-            payment_id
-        );
+        debug!("Stub provider: no payment record for payment_id={payment_id}");
 
-        // Stub: Always return verified
         Ok(PaymentVerificationResult {
-            verified: true,
-            amount_msats: Some(1000), // Stub amount
-            timestamp: Some(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            ),
+            verified: false,
+            amount_msats: None,
+            timestamp: None,
             metadata: serde_json::json!({
                 "provider": "stub",
-                "note": "This is a stub implementation for testing",
+                "note": "stub provider does not observe payments",
             }),
         })
     }
@@ -70,8 +62,7 @@ impl LightningProvider for StubProvider {
     }
 
     async fn is_payment_confirmed(&self, _payment_hash: &[u8; 32]) -> Result<bool, LightningError> {
-        // Stub: Always return true
-        Ok(true)
+        Ok(false)
     }
 
     fn provider_type(&self) -> ProviderType {
