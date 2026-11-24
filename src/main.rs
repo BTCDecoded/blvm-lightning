@@ -28,7 +28,11 @@ async fn main() -> Result<()> {
         let bootstrap = bootstrap.clone();
         let data_dir = data_dir.to_path_buf();
         async move {
-            let (ctx, _config) = bootstrap.context_with_config::<LightningConfig>(&data_dir);
+            let (ctx, _config) = bootstrap
+                .context_with_config::<LightningConfig>(&data_dir)
+                .map_err(|error| {
+                    blvm_node::module::traits::ModuleError::Other(error.to_string())
+                })?;
             let processor = LightningProcessor::new(&ctx, Arc::clone(&node_api))
                 .await
                 .map_err(|e| {

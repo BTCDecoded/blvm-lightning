@@ -2,6 +2,7 @@
 name = "blvm-lightning"
 version = "0.1.8"
 edition = "2024"
+rust-version = "1.91"
 authors = ["Bitcoin Commons Team"]
 description = "Lightning Network payment processor module for blvm-node"
 license = "MIT"

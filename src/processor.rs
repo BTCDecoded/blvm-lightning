@@ -37,19 +37,19 @@ pub(crate) fn invoice_amount_rejection(
     max_payment_sats: Option<u64>,
 ) -> Option<String> {
     let amount_sats = amount_msats / 1000;
-    if let Some(min) = min_payment_sats {
-        if amount_sats < min {
-            return Some(format!(
-                "amount {amount_sats} sats is below min_payment_sats {min}"
-            ));
-        }
+    if let Some(min) = min_payment_sats
+        && amount_sats < min
+    {
+        return Some(format!(
+            "amount {amount_sats} sats is below min_payment_sats {min}"
+        ));
     }
-    if let Some(max) = max_payment_sats {
-        if amount_sats > max {
-            return Some(format!(
-                "amount {amount_sats} sats is above max_payment_sats {max}"
-            ));
-        }
+    if let Some(max) = max_payment_sats
+        && amount_sats > max
+    {
+        return Some(format!(
+            "amount {amount_sats} sats is above max_payment_sats {max}"
+        ));
     }
     None
 }
@@ -118,20 +118,20 @@ impl LightningProcessor {
         let invoice_db = blvm_sdk::module::ModuleDb::open(data_dir)
             .ok()
             .map(|m| m.as_db());
-        if let Some(ref db) = invoice_db {
-            if let Ok(tree) = db.open_tree(CONFIG_TREE) {
-                let provider_type_str = match provider.provider_type() {
-                    ProviderType::LNBits => "lnbits",
-                    ProviderType::LDK => "ldk",
-                    ProviderType::Stub => "stub",
-                };
-                let _ = tree.insert(
-                    b"lightning_config:provider_type",
-                    provider_type_str.as_bytes(),
-                );
-                let _ = tree.insert(b"lightning_config:channel_count", &0u64.to_be_bytes());
-                let _ = tree.insert(b"lightning_config:total_capacity_sats", &0u64.to_be_bytes());
-            }
+        if let Some(ref db) = invoice_db
+            && let Ok(tree) = db.open_tree(CONFIG_TREE)
+        {
+            let provider_type_str = match provider.provider_type() {
+                ProviderType::LNBits => "lnbits",
+                ProviderType::LDK => "ldk",
+                ProviderType::Stub => "stub",
+            };
+            let _ = tree.insert(
+                b"lightning_config:provider_type",
+                provider_type_str.as_bytes(),
+            );
+            let _ = tree.insert(b"lightning_config:channel_count", &0u64.to_be_bytes());
+            let _ = tree.insert(b"lightning_config:total_capacity_sats", &0u64.to_be_bytes());
         }
 
         Ok(Self {
@@ -153,28 +153,28 @@ impl LightningProcessor {
             ModuleMessage::Event(event_msg) => {
                 match event_msg.event_type {
                     EventType::ModuleEvent => {
-                        if let EventPayload::ModuleEvent { name, data, .. } = &event_msg.payload {
-                            if name == "PaymentRequestCreated" {
-                                let value: serde_json::Value =
-                                    serde_json::from_slice(data).unwrap_or(serde_json::Value::Null);
-                                let payment_id = value
-                                    .get("payment_id")
-                                    .and_then(|item| item.as_str())
-                                    .unwrap_or("");
-                                if let Some(invoice_str) =
-                                    value.get("invoice").and_then(|item| item.as_str())
-                                {
-                                    debug!("Processing payment request: {}", payment_id);
-                                    if let Some(ref db) = self.invoice_db {
-                                        crate::invoice_store::store_invoice(
-                                            db,
-                                            payment_id,
-                                            invoice_str,
-                                        );
-                                    }
-                                    self.process_payment(invoice_str, payment_id, node_api)
-                                        .await?;
+                        if let EventPayload::ModuleEvent { name, data, .. } = &event_msg.payload
+                            && name == "PaymentRequestCreated"
+                        {
+                            let value: serde_json::Value =
+                                serde_json::from_slice(data).unwrap_or(serde_json::Value::Null);
+                            let payment_id = value
+                                .get("payment_id")
+                                .and_then(|item| item.as_str())
+                                .unwrap_or("");
+                            if let Some(invoice_str) =
+                                value.get("invoice").and_then(|item| item.as_str())
+                            {
+                                debug!("Processing payment request: {}", payment_id);
+                                if let Some(ref db) = self.invoice_db {
+                                    crate::invoice_store::store_invoice(
+                                        db,
+                                        payment_id,
+                                        invoice_str,
+                                    );
                                 }
+                                self.process_payment(invoice_str, payment_id, node_api)
+                                    .await?;
                             }
                         }
                     }
@@ -320,13 +320,12 @@ impl LightningProcessor {
                 .call_module(Some("blvm-payment"), "getpaymentstate", params)
                 .await
                 .ok();
-            if let Some(payload) = settled_from_payment_state(payment_id, reply.as_deref()) {
-                if let Err(e) = node_api
+            if let Some(payload) = settled_from_payment_state(payment_id, reply.as_deref())
+                && let Err(e) = node_api
                     .publish_event(EventType::ModuleEvent, payload)
                     .await
-                {
-                    debug!("Failed to publish PaymentSettled: {}", e);
-                }
+            {
+                debug!("Failed to publish PaymentSettled: {}", e);
             }
         } else {
             warn!(

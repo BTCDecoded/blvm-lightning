@@ -773,13 +773,13 @@ fn load_seed(ldk_dir: &Path, configured: Option<Vec<u8>>) -> Result<[u8; 32], Li
         }
         let mut seed = [0u8; 32];
         seed.copy_from_slice(&existing);
-        if let Some(configured) = configured {
-            if configured != seed {
-                return Err(LightningError::ConfigError(
-                    "configured LDK seed does not match the seed stored in the data directory"
-                        .to_string(),
-                ));
-            }
+        if let Some(configured) = configured
+            && configured != seed
+        {
+            return Err(LightningError::ConfigError(
+                "configured LDK seed does not match the seed stored in the data directory"
+                    .to_string(),
+            ));
         }
         return Ok(seed);
     }
@@ -1407,10 +1407,10 @@ impl LDKProvider {
                 );
                 publish_notices_detached(node.as_ref(), notices).await;
                 flush_broadcaster(&broadcaster, node.as_ref()).await;
-                if manager_slot.get_and_clear_needs_persistence() {
-                    if let Err(err) = persist_manager_file(&ldk_dir, manager_slot.as_ref()) {
-                        error!(%err, "failed to persist LDK channel manager");
-                    }
+                if manager_slot.get_and_clear_needs_persistence()
+                    && let Err(err) = persist_manager_file(&ldk_dir, manager_slot.as_ref())
+                {
+                    error!(%err, "failed to persist LDK channel manager");
                 }
                 if let Err(err) = persist_routing(&ldk_dir, graph.as_ref(), &scorer) {
                     error!(%err, "failed to persist LDK routing state");
@@ -1478,10 +1478,10 @@ fn fund_ready_channel(
         .lock()
         .expect("LDK funding reservation")
         .remove(temporary_channel_id);
-    if coins.is_some() {
-        if let Err(err) = save_funding(ldk_dir, funding) {
-            error!(%err, "failed to persist the funding reservation after it was spent");
-        }
+    if coins.is_some()
+        && let Err(err) = save_funding(ldk_dir, funding)
+    {
+        error!(%err, "failed to persist the funding reservation after it was spent");
     }
     let Some(coins) = coins else {
         error!(
@@ -2201,10 +2201,8 @@ fn remember_payment(
     if let Ok(mut set) = confirmed.write() {
         set.insert(hash);
     }
-    if received {
-        if let Ok(mut set) = inbound.write() {
-            set.insert(hash);
-        }
+    if received && let Ok(mut set) = inbound.write() {
+        set.insert(hash);
     }
     if let Ok(mut map) = amounts.lock() {
         map.insert(hash, amount_msat);
@@ -2236,10 +2234,8 @@ fn release_funding(
         .expect("LDK funding reservation")
         .remove(id)
         .is_some();
-    if removed {
-        if let Err(err) = save_funding(ldk_dir, funding) {
-            error!(%err, "failed to persist funding.json after releasing a reservation");
-        }
+    if removed && let Err(err) = save_funding(ldk_dir, funding) {
+        error!(%err, "failed to persist funding.json after releasing a reservation");
     }
 }
 
@@ -2343,10 +2339,10 @@ impl lightning::chain::chainmonitor::Persist<InMemorySigner> for DiskStore {
     ) {
         let path = self.monitor_path(&channel_funding_outpoint);
         let archived = PathBuf::from(format!("{}.archived", path.display()));
-        if let Err(err) = fs::rename(&path, &archived) {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                error!(%err, path = %path.display(), "failed to archive channel monitor");
-            }
+        if let Err(err) = fs::rename(&path, &archived)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            error!(%err, path = %path.display(), "failed to archive channel monitor");
         }
     }
 }
